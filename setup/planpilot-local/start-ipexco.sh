@@ -32,6 +32,7 @@ EOF
 }
 
 BUILD=1
+BUILD_ALL_EXPLICIT=0
 WITH_PLANPILOT=1
 PLANPILOT_MODE_EXPLICIT=0
 BUILD_SERVICES=()
@@ -49,7 +50,7 @@ add_build_service() {
 
 while (($#)); do
   case "$1" in
-    --build) BUILD=1 ;;
+    --build) BUILD=1; BUILD_ALL_EXPLICIT=1 ;;
     --no-build) BUILD=0 ;;
     --with-planpilot) WITH_PLANPILOT=1; PLANPILOT_MODE_EXPLICIT=1 ;;
     --without-planpilot) WITH_PLANPILOT=0; PLANPILOT_MODE_EXPLICIT=1 ;;
@@ -65,7 +66,7 @@ while (($#)); do
   shift
 done
 
-if (( BUILD && ${#BUILD_SERVICES[@]} > 0 )); then
+if (( BUILD_ALL_EXPLICIT && ${#BUILD_SERVICES[@]} > 0 )); then
   echo "--build cannot be combined with --build-service." >&2
   exit 2
 fi
@@ -154,6 +155,6 @@ if (( WITH_PLANPILOT )); then
   if [[ -n "${PLANPILOT_API_KEY:-}" ]]; then
     echo "Use the API key supplied through PLANPILOT_API_KEY."
   else
-    echo "Use the local default API key: test"
+    echo "Use the local default API key: ipexco-demo-api-key"
   fi
 fi

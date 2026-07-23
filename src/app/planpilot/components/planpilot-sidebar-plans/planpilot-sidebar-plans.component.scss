@@ -222,9 +222,18 @@ summary small,
   gap: var(--spacing-050);
 }
 
-.plan-summary-row:hover,
+.plan-summary-row:not(:disabled) {
+  cursor: pointer;
+}
+
+.plan-summary-row:hover:not(:disabled),
 .plan-summary-row.active {
   background: var(--mat-sys-surface-container-low);
+}
+
+.plan-summary-row:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: -2px;
 }
 
 .plan-summary-row.active {

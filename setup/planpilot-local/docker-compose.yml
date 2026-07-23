@@ -64,7 +64,7 @@ services:
     env_file:
       - ./env/planpilot.env
     environment:
-      API_KEY: ${PLANPILOT_API_KEY:-test}
+      API_KEY: ${PLANPILOT_API_KEY:-ipexco-demo-api-key}
     depends_on:
       planpilot-init:
         condition: service_completed_successfully
