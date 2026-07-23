@@ -2,7 +2,7 @@ import { inject, Injectable } from "@angular/core";
 import { Actions, createEffect, ofType } from "@ngrx/effects";
 import { catchError, switchMap, tap } from "rxjs/operators";
 import { of } from "rxjs";
-import { logout, logoutFailure, logoutSuccess } from "../user.actions";
+import { logout, logoutSuccess } from "../user.actions";
 import { AuthenticationService } from "../../services/authentication.service";
 
 @Injectable()
@@ -14,8 +14,8 @@ export class LogoutEffect{
     public logoutUser$ = createEffect(() => this.actions$.pipe(
         ofType(logout),
         switchMap(() => this.service.logout().pipe(
-            switchMap(user => [logoutSuccess()]),
-            catchError((e) => of(logoutFailure({err: e})))
+            switchMap(() => [logoutSuccess()]),
+            catchError(() => of(logoutSuccess()))
         ))
     ))
 

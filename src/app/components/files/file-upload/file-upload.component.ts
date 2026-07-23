@@ -29,6 +29,9 @@ export class TemplateFileUploadComponent {
 
   onUploadFileSelected() {
     let fileObject = this.inputNode?.nativeElement.files[0];
+    if (!fileObject) {
+      return;
+    }
 
     if (typeof FileReader !== "undefined") {
       const reader = new FileReader();

@@ -1,3 +1,5 @@
+name: ${IPEXCO_COMPOSE_PROJECT_NAME:-ipexco-planpilot-local}
+
 services:
   mongo:
     image: mongo:8.2

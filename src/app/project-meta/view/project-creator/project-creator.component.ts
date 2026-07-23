@@ -82,6 +82,8 @@ export class ProjectCreatorComponent {
   selectedProblem: string | undefined
 
   translatedPddlModel$ = this.pddlService.getModel().pipe(startWith(null));
+  pddlParsing$ = this.pddlService.getParsing();
+  pddlError$ = this.pddlService.getError();
   pddlModelValid$ = this.translatedPddlModel$.pipe(
     map(m => !!this.selectedProblem && !!this.selectedDomain && !!m)
   )
