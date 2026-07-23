@@ -14,6 +14,11 @@ describe('DemoInfoComponent', () => {
 
     fixture = TestBed.createComponent(DemoInfoComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('demo', {
+      summaryImage: '',
+      domainInfo: '',
+      instanceInfo: ''
+    });
     fixture.detectChanges();
   });
 

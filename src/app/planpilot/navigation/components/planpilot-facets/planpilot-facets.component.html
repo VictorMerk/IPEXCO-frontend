@@ -1,0 +1,295 @@
+<section class="planpilot">
+  <h3>PlanPilot – Facet Navigation</h3>
+
+  <!-- Start form -->
+  <form [formGroup]="startForm" (ngSubmit)="startSession()" class="start-form">
+    <mat-form-field>
+      <mat-label>Horizon</mat-label>
+      <input matInput type="number" formControlName="horizon" min="1" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Encoding</mat-label>
+      <mat-select formControlName="encoding">
+        @for (enc of encodings; track enc) {
+          <mat-option [value]="enc">{{ enc }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-checkbox formControlName="abstractTimeSteps">Abstract time steps</mat-checkbox>
+
+    <button
+      mat-raised-button
+      color="primary"
+      type="submit"
+      [disabled]="(loading$ | async) || startForm.invalid"
+    >
+      Start session
+    </button>
+  </form>
+
+  <!-- Status -->
+  @if (loading$ | async) {
+    <p class="status">Loading …</p>
+  }
+  @if (error$ | async; as error) {
+    <p class="status status--error">Error: {{ error }}</p>
+  }
+
+  <!-- Remaining plans (count + enumeration), with recalculation feedback -->
+  @let solutionsLoading = solutionsLoading$ | async;
+  @let solutionCount = solutionCount$ | async;
+
+  <div class="remaining" [class.remaining--recalculating]="solutionsLoading">
+    @if (solutionCount !== null && solutionCount !== undefined) {
+      <p class="remaining-plans">Remaining plans: {{ solutionCount }}</p>
+    }
+
+    @if (solutionsLoading) {
+      <div class="recalculating">
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <span class="recalculating__label">Recalculating remaining plans …</span>
+      </div>
+    }
+
+    <!-- Remaining plans, listed one page at a time -->
+    @if (solutions$ | async; as solutions) {
+      @if (solutions.length > 0) {
+        <p class="solutions__summary">
+          @if (solutionCount !== null && solutionCount !== undefined) {
+            Showing {{ solutions.length }} of {{ solutionCount }} plans
+          } @else {
+            Showing {{ solutions.length }} plans
+          }
+        </p>
+        <div class="solutions">
+          @for (solution of solutions; track solution.label; let i = $index) {
+            <div class="solution">
+              <h5 class="solution__title">{{ solution.label || 'Plan ' + (i + 1) }}</h5>
+              <ol class="solution__steps">
+                @for (step of planSteps(solution.facets); track step.id) {
+                  <li class="solution__step">t{{ step.timestep }}: {{ step.label }}</li>
+                }
+              </ol>
+            </div>
+          }
+        </div>
+        @if (hasMoreSolutions$ | async) {
+          <div class="solutions__more">
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="showMorePlans()"
+              [disabled]="solutionsLoading ?? false"
+            >
+              Show more plans
+            </button>
+          </div>
+        }
+      }
+    }
+  </div>
+
+  <!-- Filter facets by label -->
+  @if (runId$ | async) {
+    <mat-form-field class="facet-search" subscriptSizing="dynamic">
+      <mat-label>Filter facets</mat-label>
+      <mat-select [formControl]="filterControl">
+        <mat-option value="">All facets</mat-option>
+        @for (label of filterOptions$ | async; track label) {
+          <mat-option [value]="label">{{ label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  <!-- Submit bar: staged selections are applied only on submit -->
+  @if (runId$ | async) {
+    <div class="submit-bar">
+      <span class="submit-bar__info">
+        @if (pendingCount() > 0) {
+          {{ pendingCount() }} pending change{{ pendingCount() === 1 ? '' : 's' }}
+        } @else {
+          No pending changes
+        }
+      </span>
+      <button
+        mat-raised-button
+        type="button"
+        class="submit-bar__discard"
+        (click)="discard()"
+        [disabled]="pendingCount() === 0 || ((loading$ | async) ?? false)"
+      >
+        Discard
+      </button>
+      <button
+        mat-raised-button
+        type="button"
+        class="submit-bar__submit"
+        (click)="submit()"
+        [disabled]="pendingCount() === 0 || ((loading$ | async) ?? false)"
+      >
+        Submit
+      </button>
+    </div>
+  }
+
+  <!-- Implied facets ('|= %'): landmarks forced by the committed decisions -->
+  @if (runId$ | async) {
+    <div class="implied">
+      <div class="implied__bar">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="showImpliedFacets()"
+          [disabled]="(loading$ | async) ?? false"
+        >
+          Show implied facets
+        </button>
+        @if (impliedFacetsShown$ | async) {
+          <button mat-button type="button" (click)="hideImpliedFacets()">Hide</button>
+        }
+        <span class="implied__hint">
+          Additional facets forced by your committed decisions – true in every remaining
+          plan (your own picks are not repeated here).
+        </span>
+      </div>
+
+      @if (impliedFacetsShown$ | async) {
+        @if (impliedFacetsLoading$ | async) {
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        } @else {
+          @if (impliedFacets$ | async; as implied) {
+            @if (implied.length > 0) {
+              <ul class="implied__list">
+                @for (facet of implied; track facet.id) {
+                  <li class="implied__item">
+                    <span class="facet__label">{{ facet.label }}</span>
+                    <span class="facet__timestep">{{ timestepLabel(facet) }}</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="status">No additional facets are forced yet – commit more decisions to narrow the plans.</p>
+            }
+          }
+        }
+      }
+    </div>
+  }
+
+  <!-- Two columns: open choices (left) and made decisions (right) -->
+  <div class="columns">
+    <!-- Left column: open decisions, split into state (holds) and actions (occurs) -->
+    <div class="column">
+      <h4 class="column__title">Open decisions</h4>
+      @if (openFacetGroups$ | async; as groups) {
+        @if (facetGroupsTotal(groups) > 0) {
+          <mat-accordion multi class="facet-groups">
+            @for (group of groups; track group.kind) {
+              <mat-expansion-panel class="facet-group">
+                <mat-expansion-panel-header>
+                  <mat-panel-title class="facet-group__title">
+                    {{ group.title }}
+                    <span class="facet-group__count">{{ group.facets.length }}</span>
+                  </mat-panel-title>
+                </mat-expansion-panel-header>
+
+                @if (group.facets.length > 0) {
+                  <ul class="facet-list">
+                    @for (facet of group.facets; track facet.id) {
+                      <li class="facet" [class.facet--pending]="isPending(facet)">
+                        <div class="facet__head">
+                          <span class="facet__label">{{ facet.label }}</span>
+                          @if (isPending(facet)) {
+                            <span class="facet__pending">pending</span>
+                          }
+                          <span class="facet__timestep">{{ timestepLabel(facet) }}</span>
+                        </div>
+
+                        <mat-button-toggle-group
+                          [value]="selectionFor(facet)"
+                          (change)="onSelectionChange(facet, $event.value)"
+                          [disabled]="(loading$ | async) ?? false"
+                        >
+                          <mat-button-toggle [value]="SelectionState.NEGATIVE">Forbid</mat-button-toggle>
+                          <mat-button-toggle [value]="SelectionState.NEUTRAL">Neutral</mat-button-toggle>
+                          <mat-button-toggle [value]="SelectionState.POSITIVE">Enforce</mat-button-toggle>
+                        </mat-button-toggle-group>
+
+                        @if (whatIfCounts(facet); as counts) {
+                          <span class="facet__remaining">
+                            Enforce → {{ counts.enforce }} · Forbid → {{ counts.forbid }} plans
+                          </span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="status facet-group__empty">{{ group.emptyText }}</p>
+                }
+              </mat-expansion-panel>
+            }
+          </mat-accordion>
+        } @else if (filterControl.value) {
+          <p class="status">No open decisions match the filter.</p>
+        } @else if (runId$ | async) {
+          <p class="status">
+            This plan space is empty – no plan matches the chosen horizon and encoding.
+            Try a larger horizon, or the "bounded" encoding to allow shorter plans.
+          </p>
+        } @else {
+          <p class="status">No facets yet – start a session.</p>
+        }
+      }
+    </div>
+
+    <!-- Right column: made decisions (committed + staged picks) -->
+    <div class="column">
+      <h4 class="column__title">Made decisions</h4>
+      @if (madeDecisions$ | async; as rows) {
+        @if (rows.length > 0) {
+          <ul class="facet-list">
+            @for (row of rows; track row.facet.id) {
+              <li
+                class="facet facet--decision"
+                [class.facet--pending]="row.pending"
+              >
+                <div class="facet__head">
+                  <span class="facet__label">{{ row.facet.label }}</span>
+                  @if (row.pending) {
+                    <span class="facet__pending">{{ row.pendingLabel }}</span>
+                  }
+                  <span class="facet__timestep">{{ timestepLabel(row.facet) }}</span>
+                </div>
+
+                <div class="facet__decision-row">
+                  <span
+                    class="facet__badge"
+                    [class.facet__badge--keep]="row.displayState === SelectionState.POSITIVE"
+                    [class.facet__badge--forbid]="row.displayState === SelectionState.NEGATIVE"
+                  >
+                    {{ row.displayState === SelectionState.POSITIVE ? 'Enforce' : 'Forbid' }}
+                  </span>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    (click)="toggleDecision(row)"
+                    [disabled]="(loading$ | async) ?? false"
+                  >
+                    {{ row.pending ? 'Cancel' : 'Undo' }}
+                  </button>
+                </div>
+              </li>
+            }
+          </ul>
+        } @else if (filterControl.value) {
+          <p class="status">No made decisions match the filter.</p>
+        } @else {
+          <p class="status">No decisions made yet.</p>
+        }
+      }
+    </div>
+  </div>
+</section>

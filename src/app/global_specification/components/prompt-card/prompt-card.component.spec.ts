@@ -14,6 +14,9 @@ describe('PromptCardComponent', () => {
 
     fixture = TestBed.createComponent(PromptCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('prompt', { name: 'Test prompt' });
+    fixture.componentRef.setInput('domains', []);
+    fixture.componentRef.setInput('explainer', []);
     fixture.detectChanges();
   });
 

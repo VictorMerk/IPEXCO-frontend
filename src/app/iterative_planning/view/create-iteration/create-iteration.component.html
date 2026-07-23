@@ -10,7 +10,7 @@
           <app-side-sheet-section-content>
             <app-info>
               <mat-icon>lightbulb_2</mat-icon>
-              <span>You can navigate around the app while keeping this panel opened. You can only create a new step once the plan computation for the previous step finished.</span>
+              <span>You can keep using the app while this panel is open. A new step can only be created after the previous plan calculation has finished.</span>
             </app-info>
           </app-side-sheet-section-content>
         </app-side-sheet-section>
@@ -21,12 +21,15 @@
             <mat-form-field appearance="outline">
               <mat-label>Iteration Name</mat-label>
               <input matInput required [formControl]="form.controls.general.controls.name"/>
+              @if (form.controls.general.controls.name.invalid && form.controls.general.controls.name.touched) {
+                <mat-error>Enter a name containing at least one visible character.</mat-error>
+              }
             </mat-form-field>
           </app-side-sheet-section-content>
         </app-side-sheet-section>
 
         <app-side-sheet-section>
-          <app-side-sheet-section-title>Enforced Goals*</app-side-sheet-section-title>
+          <app-side-sheet-section-title>Enforced Goals (Optional)</app-side-sheet-section-title>
           <app-side-sheet-section-content>
             <app-editable-list>
 
@@ -39,9 +42,9 @@
               </app-editable-list-entry>
               }
 
-              @if(!(hasEnforcedPlanProperties$ | async)) {
+              @if((hasEnforcedPlanProperties$ | async) === false) {
               <app-editable-list-empty-state>
-                <span>Add properties that should be fulfilled by the plan.</span>
+                <span>If no goal is selected, the planner uses the goal from the PDDL task.</span>
                 <mat-icon>emoji_events</mat-icon>
               </app-editable-list-empty-state>
               }
@@ -53,7 +56,7 @@
         </app-side-sheet-section>
 
         <app-side-sheet-section *isProject>
-          <app-side-sheet-section-title>Reference Goals</app-side-sheet-section-title>
+          <app-side-sheet-section-title>Optional Reference Goals</app-side-sheet-section-title>
           <app-side-sheet-section-content>
             <app-editable-list>
 
@@ -66,9 +69,9 @@
               </app-editable-list-entry>
               }
 
-              @if(!(hasSoftPlanProperties$ | async)) {
+              @if((hasSoftPlanProperties$ | async) === false) {
               <app-editable-list-empty-state>
-                <span>Add properties that you would be interested in observing additionally.</span>
+                <span>No reference goals. Add properties here only when they should be observed without constraining the plan.</span>
                 <mat-icon>flag_check</mat-icon>
               </app-editable-list-empty-state>
               }

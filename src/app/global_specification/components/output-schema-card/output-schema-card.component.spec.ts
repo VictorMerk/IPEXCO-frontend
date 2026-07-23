@@ -14,6 +14,9 @@ describe('OutputSchemaCardComponent', () => {
 
     fixture = TestBed.createComponent(OutputSchemaCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('schema', { name: 'Test schema' });
+    fixture.componentRef.setInput('domains', []);
+    fixture.componentRef.setInput('explainer', []);
     fixture.detectChanges();
   });
 

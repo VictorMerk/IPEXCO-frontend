@@ -1,0 +1,105 @@
+services:
+  mongo:
+    image: mongo:8.2
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    volumes:
+      - ./.runtime/ipexco-mongo:/data/db
+    ports:
+      - "127.0.0.1:27017:27017"
+
+  ipexco-backend:
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    build:
+      context: ${IPEXCO_BACKEND_DIR:-../../../IPEXCO-backend}
+    image: ipexco-backend:local
+    volumes:
+      - ./.runtime/ipexco-data:/usr/src/app/dist/out-tsc/data
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - ./env/backend.env
+    environment:
+      JWT_KEY: ${IPEXCO_JWT_KEY:-ipexco-demo-jwt-key}
+      SERVICE_KEY: ${IPEXCO_SERVICE_KEY:-ipexco-demo-service-key}
+    depends_on:
+      - mongo
+
+  ipexco-frontend:
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    build:
+      context: ${IPEXCO_FRONTEND_DIR:-../..}
+    image: ipexco-frontend:local
+    volumes:
+      - ./frontend.nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:4200:80"
+    depends_on:
+      - ipexco-backend
+
+  planpilot-init:
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    image: planpilot-service:local
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R ${IPEXCO_HOST_UID:-1000}:${IPEXCO_HOST_GID:-1000} /app/instance /app/temp"]
+    volumes:
+      - ./.runtime/planpilot-data:/app/instance
+      - ./.runtime/planpilot-temp:/app/temp
+    restart: "no"
+    profiles: [planpilot]
+
+  planpilot:
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    build:
+      context: ${PLANPILOT_SERVICE_DIR:-../../../planpilot-service}
+    image: planpilot-service:local
+    user: "${IPEXCO_HOST_UID:-1000}:${IPEXCO_HOST_GID:-1000}"
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./.runtime/planpilot-data:/app/instance
+      - ./.runtime/planpilot-temp:/app/temp
+    env_file:
+      - ./env/planpilot.env
+    environment:
+      API_KEY: ${PLANPILOT_API_KEY:-test}
+    depends_on:
+      planpilot-init:
+        condition: service_completed_successfully
+    profiles: [planpilot]
+
+  property-checker:
+    image: eifler/property_checker_service:main
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    ports:
+      - "127.0.0.1:3335:3335"
+    env_file:
+      - ./env/property-checker.env
+    environment:
+      SERVICE_KEY: ${IPEXCO_SERVICE_KEY:-ipexco-demo-service-key}
+    depends_on:
+      - mongo
+
+  planner-fd:
+    image: eifler/planner-service:latest
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    ports:
+      - "127.0.0.1:3333:3333"
+    env_file:
+      - ./env/planner.env
+    environment:
+      SERVICE_KEY: ${IPEXCO_SERVICE_KEY:-ipexco-demo-service-key}
+    depends_on:
+      - mongo
+
+  explainer:
+    image: eifler/explainer-service:latest
+    platform: ${IPEXCO_DOCKER_PLATFORM:-linux/amd64}
+    ports:
+      - "127.0.0.1:3334:3334"
+    env_file:
+      - ./env/explainer.env
+    environment:
+      SERVICE_KEY: ${IPEXCO_SERVICE_KEY:-ipexco-demo-service-key}
+    depends_on:
+      - mongo

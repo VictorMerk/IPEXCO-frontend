@@ -1,21 +1,33 @@
-import { HttpHandlerFn, HttpRequest,} from "@angular/common/http";
+import { HttpErrorResponse, HttpHandlerFn, HttpRequest,} from "@angular/common/http";
 import { selectToken } from "../user/state/user.selector";
-import { toSignal } from "@angular/core/rxjs-interop";
 import { inject } from "@angular/core";
 import { Store } from "@ngrx/store";
+import { catchError, throwError } from "rxjs";
+import { logoutSuccess } from "../user/state/user.actions";
 
 
 export function authInterceptor(req: HttpRequest<unknown>, next: HttpHandlerFn) {
 
-  const token =  toSignal(inject(Store).select(selectToken));
+  const store = inject(Store);
+  const token = store.selectSignal(selectToken);
+  const authToken = token() ?? localStorage.getItem("jwt-token");
   
-  if(!token()){
+  if(!authToken){
     return next(req);
   }
 
   const newReq = req.clone({
-    headers: req.headers.append('Authorization', 'Bearer ' + token()),
+    headers: req.headers.append('Authorization', 'Bearer ' + authToken),
   });
   
-  return next(newReq);
+  return next(newReq).pipe(
+    catchError((error) => {
+      if (error instanceof HttpErrorResponse && error.status === 401) {
+        localStorage.removeItem("jwt-token");
+        store.dispatch(logoutSuccess());
+      }
+
+      return throwError(() => error);
+    }),
+  );
 }

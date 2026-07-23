@@ -49,10 +49,10 @@ export class ServiceCreatorComponent {
 
   form = this.fb.group({
       name: this.fb.control<string | null>(null, Validators.required),
-      type: this.fb.control<ServiceType | null>(null, Validators.required),
+      type: this.fb.control<ServiceType | null>(ServiceType.PLANNER, Validators.required),
       apiKey: this.fb.control<string | null>(null, Validators.required),
       url: this.fb.control<string | null>(null, [Validators.required, Validators.pattern(this.urlRegex)]),
-      encoding: this.fb.control<Encoding | null>(null, Validators.required),
+      encoding: this.fb.control<Encoding | null>(Encoding.PDDL_CLASSIC, Validators.required),
       domainId: this.fb.control<string | null>(null),
   }, { validators: domainOnlyForDomainDependentEncoding });
 
@@ -61,6 +61,11 @@ export class ServiceCreatorComponent {
   }
 
   onCreate(){
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     let service: ServiceBase = {
       name: this.form.controls.name.value ?? 'TODO',
       type: this.form.controls.type.value ?? ServiceType.NONE,

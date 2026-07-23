@@ -1,0 +1,288 @@
+:host {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-100);
+}
+
+.inspector-card {
+  display: grid;
+  gap: var(--spacing-100);
+  min-width: 0;
+  padding: var(--spacing-050) 0 var(--spacing-200);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+summary,
+.common-actions-row,
+.plan-browser-heading,
+.plan-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-100);
+}
+
+summary {
+  cursor: pointer;
+}
+
+summary > span:first-child,
+.common-actions-row > span:first-child,
+.plan-browser-heading > span:first-child,
+.comparison-heading {
+  display: grid;
+  gap: var(--spacing-050);
+  min-width: 0;
+}
+
+summary small,
+.common-actions-row small,
+.common-actions-state,
+.analysis-empty,
+.analysis-error,
+.analysis-note {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.common-actions-state {
+  white-space: nowrap;
+}
+
+.plan-count,
+.plan-list-heading > span {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-list-heading > span {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-050);
+}
+
+.compact-text-action {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 var(--spacing-050);
+  border: 0;
+  border-radius: 4px;
+  color: var(--mat-sys-primary);
+  background: transparent;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.compact-text-action:hover:not(:disabled) {
+  background: var(--mat-sys-surface-container-low);
+}
+
+.space-explanation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-100);
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.8rem;
+}
+
+.plan-page-controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--spacing-100);
+  align-items: center;
+}
+
+.plan-page-controls button:last-child {
+  justify-self: end;
+}
+
+.plan-page-controls > span {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-jump {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px auto;
+  gap: var(--spacing-100);
+  align-items: center;
+}
+
+.plan-jump label {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.78rem;
+}
+
+.plan-jump input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--spacing-100);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 6px;
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-jump button {
+  min-width: 0;
+}
+
+.spinning-icon {
+  animation: planpilot-plans-spin 0.9s linear infinite;
+}
+
+.solution-action-list,
+.common-actions-result {
+  display: grid;
+  gap: var(--spacing-050);
+  padding-top: var(--spacing-050);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.solution-action-list > summary,
+.common-actions-result > summary {
+  min-height: 28px;
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.plan-explorer ol {
+  display: grid;
+  margin: 0;
+  padding: var(--spacing-100) 0 0;
+  list-style: none;
+}
+
+.plan-explorer li {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: var(--spacing-100);
+  padding: var(--spacing-050);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.plan-explorer li small {
+  color: var(--mat-sys-on-surface-variant);
+  font-weight: 600;
+}
+
+.no-solution-message {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: var(--spacing-100);
+  color: var(--mat-sys-on-error-container);
+  background: var(--mat-sys-error-container);
+}
+
+.no-solution-message > div {
+  display: grid;
+  gap: var(--spacing-100);
+}
+
+.analysis-list,
+.plan-summary-list {
+  display: grid;
+  gap: var(--spacing-050);
+}
+
+.analysis-row,
+.plan-summary-row {
+  display: grid;
+  width: 100%;
+  gap: var(--spacing-050);
+  padding: var(--spacing-100) var(--spacing-050);
+  border: 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.analysis-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.analysis-row.unavailable {
+  opacity: 0.6;
+}
+
+.analysis-row > span {
+  display: grid;
+  gap: var(--spacing-050);
+}
+
+.plan-summary-row:hover,
+.plan-summary-row.active {
+  background: var(--mat-sys-surface-container-low);
+}
+
+.plan-summary-row.active {
+  font-weight: 600;
+}
+
+.plan-comparison {
+  display: grid;
+  gap: var(--spacing-100);
+  padding-top: var(--spacing-100);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}
+
+.comparison-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.comparison-heading small {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.comparison-fields {
+  display: grid;
+  grid-template-columns: 72px 72px minmax(0, 1fr);
+  gap: var(--spacing-100);
+  align-items: end;
+}
+
+.comparison-fields label {
+  display: grid;
+  gap: var(--spacing-050);
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.comparison-fields input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--spacing-050);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 6px;
+}
+
+.comparison-result {
+  display: grid;
+  gap: var(--spacing-050);
+  padding: var(--spacing-100);
+  border-radius: 6px;
+  background: var(--mat-sys-surface-container-low);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+@keyframes planpilot-plans-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

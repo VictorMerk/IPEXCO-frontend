@@ -5,6 +5,8 @@
 @let interfaceType = explanationInterfaceType$ | async;
 @let hasUnsolvedSoftGoals = hasUnsolvedSoftGoals$ | async;
 @let isFailed = isFailed$ | async;
+@let isSolved = isSolved$ | async;
+@let stepId = stepId$ | async;
 
 <app-page>
   <app-breadcrumb>
@@ -19,7 +21,7 @@
         (click)="deleteIteration(step?._id)"><mat-icon>delete</mat-icon></button>
       <button mat-icon-button matTooltip="Open user manual."
         (click)="onHelp()">
-      <mat-icon>help</mat-icon>
+        <mat-icon>help</mat-icon>
       </button>
       <button mat-icon-button matTooltip="Creates a new iteration based on the properties selected in this iteration."
         [disabled]="!anabelCreationInterface"
@@ -86,7 +88,7 @@
           </app-page-section>
         }
 
-      @if(!planComputationRunning && !isCanceled && isUnsolvable && (interfaceType == expInterfaceType.TEMPLATE_QUESTION_ANSWER )) {
+      @if(!planComputationRunning && !isCanceled && isUnsolvable && (interfaceType === expInterfaceType.TEMPLATE_QUESTION_ANSWER )) {
       <app-page-section>
         <app-page-section-title>
           <mat-icon>lightbulb_2</mat-icon>
@@ -102,7 +104,7 @@
 
 
 
-      @if(!planComputationRunning && !isCanceled && !isFailed && (hasUnsolvedSoftGoals || isUnsolvable) && (interfaceType == expInterfaceType.LLM_CHAT )) {
+      @if(!planComputationRunning && !isCanceled && !isFailed && (hasUnsolvedSoftGoals || isUnsolvable) && (interfaceType === expInterfaceType.LLM_CHAT )) {
       <app-page-section>
         <app-page-section-title>
           <mat-icon>lightbulb_2</mat-icon>
@@ -114,7 +116,7 @@
       </app-page-section>
       }
 
-      @if(!planComputationRunning && !isCanceled && !isFailed && (hasUnsolvedSoftGoals || isUnsolvable) && ( interfaceType == expInterfaceType.HYBRID)) {
+      @if(!planComputationRunning && !isCanceled && !isFailed && (hasUnsolvedSoftGoals || isUnsolvable) && ( interfaceType === expInterfaceType.HYBRID)) {
         <app-page-section>
           <app-page-section-title>
             <mat-icon>lightbulb_2</mat-icon>
@@ -141,7 +143,7 @@
         </app-page-section>
         }
 
-      @if(!planComputationRunning && !isCanceled && !isUnsolvable && (interfaceType == expInterfaceType.TEMPLATE_QUESTION_ANSWER )) {
+      @if(!planComputationRunning && !isCanceled && !isUnsolvable && (interfaceType === expInterfaceType.TEMPLATE_QUESTION_ANSWER )) {
       <app-page-section>
         <app-page-section-title>
           <span *isProject>Unsatisfied Softgoals</span>
@@ -175,7 +177,7 @@
       </app-page-section>
       }
 
-      @if(!planComputationRunning && !isCanceled && !isFailed && !isUnsolvable && (interfaceType == expInterfaceType.LLM_CHAT || interfaceType == expInterfaceType.HYBRID)) {
+      @if(!planComputationRunning && !isCanceled && !isFailed && !isUnsolvable && (interfaceType === expInterfaceType.LLM_CHAT || interfaceType === expInterfaceType.HYBRID)) {
       <app-page-section>
         <app-page-section-title>
           <span *isProject>Unsatisfied Softgoals</span>
@@ -244,6 +246,7 @@
           }
         </app-page-section-content>
       </app-page-section>
+
     </app-page-section-list>
   </app-page-content>
 </app-page>

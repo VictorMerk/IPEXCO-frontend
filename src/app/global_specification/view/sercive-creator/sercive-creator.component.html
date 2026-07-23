@@ -51,12 +51,12 @@
                         <mat-option [value]="encoding">{{encoding}}</mat-option>
                       }
                     </mat-select>
-                    @if (form.controls.name.hasError('required')) {
+                    @if (form.controls.encoding.hasError('required')) {
                         <mat-error>Please enter an encoding</mat-error>
                     }
                 </mat-form-field>
 
-                @if(form.controls.encoding.value == encoding.DOMAIN_DEPENDENT){
+                @if(form.controls.encoding.value === encoding.DOMAIN_DEPENDENT){
                 <mat-form-field appearance="outline" class="full-width">
                     <mat-label>Domain</mat-label>
                     <mat-select [formControl]="form.controls.domainId" canSelectNullableOptions>

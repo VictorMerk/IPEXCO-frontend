@@ -44,7 +44,7 @@ export class QuestionPanelComponent implements OnInit{
       return;
     }
 
-    this.explanationAvailable =  step.globalExplanation && step.globalExplanation?.status == ExplanationRunStatus.FINISHED = "FINISHED"
+    this.explanationAvailable = Boolean(step.globalExplanation && step.globalExplanation.status === ExplanationRunStatus.FINISHED);
 
     if(this.explanationAvailable){
       // TODO Check for what this is needed

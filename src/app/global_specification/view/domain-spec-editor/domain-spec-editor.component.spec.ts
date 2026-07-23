@@ -1,6 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideMockStore } from '@ngrx/store/testing';
 
 import { DomainSpecEditorComponent } from './domain-spec-editor.component';
+import { selectDomainSpecification } from '../../state/globalSpec.selector';
 
 describe('DomainSpecEditorComponent', () => {
   let component: DomainSpecEditorComponent;
@@ -8,7 +11,13 @@ describe('DomainSpecEditorComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DomainSpecEditorComponent]
+      imports: [DomainSpecEditorComponent],
+      providers: [
+        provideMockStore({ selectors: [
+          { selector: selectDomainSpecification, value: undefined }
+        ] }),
+        provideRouter([])
+      ]
     })
     .compileComponents();
 

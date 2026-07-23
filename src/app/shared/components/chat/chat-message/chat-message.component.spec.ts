@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from "@angular/core/testing"
-import { ChatMessageComponent } from "./chat-message.component"
+import { ChatMessageComponent, Role } from "./chat-message.component"
 import { Component } from "@angular/core";
 
 @Component({
@@ -9,7 +9,7 @@ import { Component } from "@angular/core";
     imports: [ChatMessageComponent],
 })
 class TestHostComponent {
-    role = undefined;
+    role: Role | undefined = undefined;
 }
 
 describe('ChatMessage', () => {
@@ -33,10 +33,10 @@ describe('ChatMessage', () => {
 
     it('should set the class according to the specified role',() => {
         const chatContainer = element.querySelector('div');
-        testHost.role = 'mock-role';
+        testHost.role = 'sender';
         fixture.detectChanges();
 
-        expect(chatContainer).toHaveClass('mock-role');
+        expect(chatContainer).toHaveClass('sender');
     });
 
     it('should project its content', () => {

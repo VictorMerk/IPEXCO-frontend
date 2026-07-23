@@ -1,0 +1,542 @@
+@let project = project$ | async;
+
+<app-page>
+  <app-breadcrumb>
+    <a app-breadcrumb-item [routerLink]="['/project/' + project?._id]"
+      ><mat-icon>home</mat-icon></a
+    >
+    <a app-breadcrumb-item [routerLink]="['..']">PlanPilot</a>
+    <app-breadcrumb-item>Graph</app-breadcrumb-item>
+  </app-breadcrumb>
+
+  <app-page-title>
+    Plan timeline and alternatives
+    <app-page-title-action>
+      <button
+        mat-icon-button
+        type="button"
+        aria-label="Toggle fullscreen"
+        matTooltip="Toggle fullscreen"
+        (click)="toggleCanvasExpanded()"
+      >
+        <mat-icon>{{
+          canvasExpanded ? "fullscreen_exit" : "fullscreen"
+        }}</mat-icon>
+      </button>
+      <a
+        mat-icon-button
+        aria-label="Back to PlanPilot"
+        matTooltip="Back to PlanPilot"
+        [routerLink]="['..']"
+        ><mat-icon>close</mat-icon></a
+      >
+    </app-page-title-action>
+  </app-page-title>
+
+  <app-page-content>
+    <section
+      class="planpilot-workbench"
+      [class.canvas-expanded]="canvasExpanded"
+    >
+      <div class="canvas-stage">
+        @if (isBusy) {
+          <mat-progress-bar
+            class="workbench-progress"
+            mode="indeterminate"
+            [attr.aria-label]="activeOperationLabel || 'PlanPilot is working'"
+          ></mat-progress-bar>
+        }
+
+        <app-planpilot-graph
+          [facets]="graphFacets"
+          [connections]="graphConnections"
+          [selectedFacetId]="inspectedFacetId"
+          [horizon]="displayedSessionHorizon"
+          (facetSelected)="selectFacetFromGraph($event)"
+        ></app-planpilot-graph>
+
+        <div class="canvas-header" data-testid="planpilot-canvas-header">
+          <div class="legend-row">
+            <div class="graph-legend" aria-label="Graph legend">
+              <span><i class="node-key solution-key"></i>Plan</span>
+              <span><i class="node-key required-key"></i>Required</span>
+              <span><i class="node-key available-key"></i>Alternative</span>
+              <span><i class="node-key forbidden-key"></i>Forbidden</span>
+              <button
+                mat-icon-button
+                type="button"
+                class="legend-help"
+                aria-label="Explain graph colors and arrows"
+                matTooltip="Arrows connect actions in the displayed plan. Empty timesteps contain no action. A check marks when a goal first becomes true."
+              >
+                <mat-icon>info_outline</mat-icon>
+              </button>
+              <span class="connection-note visually-hidden"
+                >Arrows connect actions in the displayed plan. Empty timesteps
+                contain no action. A check marks when a goal first becomes
+                true.</span
+              >
+            </div>
+
+            @if (isBusy) {
+              <div
+                class="operation-status"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <mat-icon>sync</mat-icon
+                ><span>{{
+                  activeOperationLabel || "PlanPilot is working"
+                }}</span>
+              </div>
+            }
+
+            <div class="canvas-toolbar" aria-label="Timeline controls">
+              @if (canvasExpanded) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  aria-label="Exit fullscreen"
+                  matTooltip="Exit fullscreen (Esc)"
+                  (click)="toggleCanvasExpanded()"
+                >
+                  <mat-icon>fullscreen_exit</mat-icon>
+                </button>
+                <span class="toolbar-divider" aria-hidden="true"></span>
+              }
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Zoom in"
+                matTooltip="Zoom in"
+                (click)="zoomIn()"
+              >
+                <mat-icon>add</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Zoom out"
+                matTooltip="Zoom out"
+                (click)="zoomOut()"
+              >
+                <mat-icon>remove</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Focus displayed plan"
+                matTooltip="Focus displayed plan"
+                (click)="graph?.fitGraph()"
+              >
+                <mat-icon>route</mat-icon>
+              </button>
+              <button
+                mat-icon-button
+                type="button"
+                aria-label="Fit all actions"
+                matTooltip="Fit all actions"
+                (click)="graph?.fitAllGraph()"
+              >
+                <mat-icon>fit_screen</mat-icon>
+              </button>
+            </div>
+          </div>
+
+          @if (hiddenGraphFacetCount) {
+            <div class="graph-limit">
+              <span
+                >{{ displayedGraphDomainFacetCount }} of
+                {{ totalGraphDomainFacetCount }} actions shown</span
+              >
+              <button mat-button type="button" (click)="showMoreGraphFacets()">
+                More
+              </button>
+              <button mat-button type="button" (click)="showAllGraphFacets()">
+                All
+              </button>
+              @if (graphLimitExpanded) {
+                <button
+                  mat-button
+                  type="button"
+                  (click)="collapseGraphFacets()"
+                >
+                  Fewer
+                </button>
+              }
+            </div>
+          } @else if (graphLimitExpanded) {
+            <div class="graph-limit">
+              <span>All {{ totalGraphDomainFacetCount }} actions shown</span
+              ><button mat-button type="button" (click)="collapseGraphFacets()">
+                Fewer
+              </button>
+            </div>
+          }
+        </div>
+
+        @if (sessionStatus === "starting") {
+          <div class="canvas-state" role="status" aria-live="polite">
+            <mat-icon class="spinning-icon">sync</mat-icon
+            ><strong>{{
+              activeOperationLabel || "Preparing plan space"
+            }}</strong>
+            <span>Larger horizons may take longer.</span>
+          </div>
+        } @else if (sessionStatus === "failed") {
+          <div class="canvas-state error-state">
+            <mat-icon>error_outline</mat-icon
+            ><strong>Plan space could not be prepared</strong
+            ><span>{{ backendError }}</span
+            ><button
+              mat-flat-button
+              type="button"
+              [disabled]="isBusy"
+              (click)="startNewSession()"
+            >
+              Retry
+            </button>
+          </div>
+        } @else if (sessionStatus === "stopped") {
+          <div class="canvas-state" role="status" aria-live="polite">
+            <mat-icon>stop_circle</mat-icon><strong>Session stopped</strong
+            ><span>The plan space was released.</span
+            ><button
+              mat-flat-button
+              type="button"
+              [disabled]="isBusy"
+              (click)="startNewSession()"
+            >
+              Start new session
+            </button>
+          </div>
+        } @else if (sessionStatus === "ready" && graphFacets.length <= 1) {
+          <div class="canvas-state">
+            <mat-icon>account_tree</mat-icon
+            ><strong>No replan alternatives found</strong>
+          </div>
+        }
+
+        @if (pendingSelectionCount) {
+          <div class="apply-bar" [class.loading]="selectionPending">
+            <div>
+              <strong
+                >{{ pendingSelectionCount }} change{{
+                  pendingSelectionCount === 1 ? "" : "s"
+                }}
+                ready</strong
+              ><span>Click Apply to update the plan.</span>
+            </div>
+            <button
+              mat-button
+              type="button"
+              [disabled]="isBusy"
+              (click)="discardStagedSelections()"
+            >
+              Cancel
+            </button>
+            <button
+              mat-flat-button
+              type="button"
+              [disabled]="isBusy"
+              (click)="computeStagedSelections()"
+            >
+              @if (selectionPending) {
+                <mat-icon>sync</mat-icon>
+              }
+              Apply
+            </button>
+          </div>
+        }
+      </div>
+
+      <aside class="facet-inspector" aria-label="PlanPilot controls">
+        <header class="inspector-header">
+          <div class="inspector-brand">
+            <strong>PlanPilot</strong
+            ><span class="inspector-status">{{ sessionStatusLabel }}</span>
+          </div>
+        </header>
+        <div class="inspector-summary">
+          <section class="session-overview" aria-label="Plan space summary">
+            <span
+              ><small>{{ solutionCountKnown ? "Plans" : "Plans found" }}</small
+              ><strong
+                [matTooltip]="
+                  solutionCountKnown
+                    ? 'Exact plan count'
+                    : 'At least this many plans have been found'
+                "
+                >{{ solutionCountSummary }}</strong
+              ></span
+            >
+            <span
+              ><small>Alternatives</small
+              ><strong>{{ remainingFacetCount }}</strong></span
+            >
+            <span
+              ><small>Required</small
+              ><strong>{{ selectedConstraintCount }}</strong></span
+            >
+            <span
+              ><small>Forbidden</small
+              ><strong>{{ excludedConstraintCount }}</strong></span
+            >
+          </section>
+          <nav
+            class="inspector-navigation"
+            role="tablist"
+            aria-label="PlanPilot sections"
+          >
+            <button
+              id="planpilot-timeline-tab"
+              type="button"
+              role="tab"
+              aria-controls="planpilot-timeline"
+              [class.active]="activeSidebarSection === 'timeline'"
+              [attr.aria-selected]="activeSidebarSection === 'timeline'"
+              [attr.tabindex]="activeSidebarSection === 'timeline' ? 0 : -1"
+              (keydown)="handleSidebarTabKey($event, 'timeline')"
+              (click)="showSidebarSection('timeline')"
+            >
+              <mat-icon>view_timeline</mat-icon><span>Plan</span>
+            </button>
+            <button
+              id="planpilot-browse-tab"
+              type="button"
+              role="tab"
+              aria-controls="planpilot-action-browser"
+              [class.active]="activeSidebarSection === 'browse'"
+              [attr.aria-selected]="activeSidebarSection === 'browse'"
+              [attr.tabindex]="activeSidebarSection === 'browse' ? 0 : -1"
+              (keydown)="handleSidebarTabKey($event, 'browse')"
+              (click)="showSidebarSection('browse')"
+            >
+              <mat-icon>search</mat-icon><span>Actions</span>
+            </button>
+            <button
+              id="planpilot-plans-tab"
+              type="button"
+              role="tab"
+              aria-controls="planpilot-plans"
+              [class.active]="activeSidebarSection === 'plans'"
+              [attr.aria-selected]="activeSidebarSection === 'plans'"
+              [attr.tabindex]="activeSidebarSection === 'plans' ? 0 : -1"
+              (keydown)="handleSidebarTabKey($event, 'plans')"
+              (click)="showSidebarSection('plans')"
+            >
+              <mat-icon>list_alt</mat-icon><span>Plans</span>
+            </button>
+          </nav>
+        </div>
+
+        <div class="inspector-scroll">
+          @if (backendError) {
+            <div class="inline-message error-message">
+              <mat-icon>error_outline</mat-icon><span>{{ backendError }}</span>
+              @if (sessionRevalidationFailed) {
+                <button
+                  mat-button
+                  type="button"
+                  [disabled]="queryPending"
+                  (click)="revalidateCurrentSession()"
+                >
+                  Retry
+                </button>
+              }
+            </div>
+          } @else if (lastSelectionMessage) {
+            <div class="inline-message">
+              <mat-icon>info</mat-icon><span>{{ lastSelectionMessage }}</span>
+            </div>
+          }
+          @if (inspectedFacet && activeSidebarSection === "timeline") {
+            <div class="selected-context" aria-live="polite">
+              <span
+                ><small>Selected action</small
+                ><strong>{{ inspectedFacet.label }}</strong></span
+              ><button type="button" (click)="openInspectedFacetInActions()">
+                Open in Actions
+              </button>
+            </div>
+          }
+
+          <div
+            id="planpilot-timeline"
+            class="inspector-section"
+            role="tabpanel"
+            aria-labelledby="planpilot-timeline-tab"
+            [class.inspector-section-hidden]="
+              activeSidebarSection !== 'timeline'
+            "
+          >
+            <app-planpilot-sidebar-plan
+              [sessionHorizon]="sessionHorizon"
+              [sessionEncoding]="sessionEncoding"
+              [sessionAbstractTimeSteps]="sessionAbstractTimeSteps"
+              [activeSessionHorizon]="activeSessionHorizon"
+              [activeSessionEncoding]="activeSessionEncoding"
+              [activeSessionAbstractTimeSteps]="activeSessionAbstractTimeSteps"
+              [displayedSessionHorizon]="displayedSessionHorizon"
+              [displayedSessionEncoding]="displayedSessionEncoding"
+              [configurationChanged]="sessionConfigurationChanged"
+              [pendingSelectionCount]="pendingSelectionCount"
+              [isBusy]="isBusy"
+              [solutionCountKnown]="solutionCountKnown"
+              [solutionCount]="solutionCount"
+              [knownPlanLowerBound]="knownPlanLowerBound"
+              [solutionCountLoading]="solutionCountLoading"
+              [solutionCountError]="solutionCountError"
+              [planPreparationLoading]="planPreparationLoading"
+              [planPreparationError]="planPreparationError"
+              [timelineRows]="timelineRows"
+              [focusedTimestep]="focusedTimestep"
+              [timestepActionCounts]="timestepActionCounts"
+              (horizonChange)="updateSessionHorizon($event)"
+              (encodingChange)="updateSessionEncoding($event)"
+              (abstractTimeStepsChange)="updateAbstractTimeSteps($event)"
+              (rebuild)="applySessionConfiguration()"
+              (solutionCountLoad)="loadSolutionCount()"
+              (plansPrepare)="preparePlansThrough($event)"
+              (timestepFocus)="focusTimelineTimestep($event)"
+              (timestepActions)="showActionsAtTimestep($event)"
+            ></app-planpilot-sidebar-plan>
+          </div>
+
+          <div
+            id="planpilot-plans"
+            class="inspector-section"
+            role="tabpanel"
+            aria-labelledby="planpilot-plans-tab"
+            [class.inspector-section-hidden]="activeSidebarSection !== 'plans'"
+          >
+            <app-planpilot-sidebar-plans
+              [forcedSuffixMessage]="forcedSuffixMessage"
+              [displayedPlanActions]="displayedPlanActionViews"
+              [solutionCountKnown]="solutionCountKnown"
+              [solutionCount]="solutionCount"
+              [currentSolutionNumber]="currentSolutionNumber"
+              [knownPlanLowerBound]="knownPlanLowerBound"
+              [isBusy]="isBusy"
+              [queryPending]="queryPending"
+              [backendError]="backendError || ''"
+              [displayedSessionHorizon]="displayedSessionHorizon"
+              [commonActions]="commonActionViews"
+              [commonActionsLoaded]="requiredActionsLoaded"
+              [commonActionsLoading]="requiredActionsLoading"
+              [commonActionsError]="requiredActionsError"
+              [planSummaries]="planSummaryViews"
+              [planPageLoading]="planPageLoading"
+              [planPageStart]="planPageStart"
+              [planPageEnd]="planPageEnd"
+              [planPageError]="planPageError"
+              [comparisonPlanA]="comparisonPlanA"
+              [comparisonPlanB]="comparisonPlanB"
+              [comparison]="comparison"
+              [comparisonLoading]="comparisonLoading"
+              [comparisonError]="comparisonError"
+              [comparisonHasChanges]="comparisonHasChanges"
+              (solutionShow)="showSolution($event)"
+              (solutionJump)="jumpToSolution($event)"
+              (constraintsClear)="resetSessionView()"
+              (commonActionsLoad)="loadRequiredActions()"
+              (planPageLoad)="loadPlanPage($event)"
+              (planPagePrevious)="previousPlanPage()"
+              (planPageNext)="nextPlanPage()"
+              (comparisonPlanChange)="updatePlanComparison($event)"
+              (plansCompare)="compareSelectedPlans()"
+            ></app-planpilot-sidebar-plans>
+          </div>
+
+          <section
+            id="planpilot-action-browser"
+            class="facet-browser inspector-section"
+            role="tabpanel"
+            aria-labelledby="planpilot-browse-tab"
+            [class.inspector-section-hidden]="activeSidebarSection !== 'browse'"
+          >
+            @let browser = actionBrowserView;
+            <app-planpilot-sidebar-actions
+              [selectedAction]="selectedActionView"
+              [rows]="browser.rows"
+              [filters]="browser.filters"
+              [activeFilter]="activeFilter"
+              [activeTimestep]="activeTimestep"
+              [query]="query"
+              [matchingCount]="browser.matchingCount"
+              [hiddenCount]="browser.hiddenCount"
+              [isBusy]="isBusy"
+              [impactCalculated]="impactCalculated"
+              [impactLoading]="impactLoading"
+              [impactError]="impactError"
+              [impactNotice]="impactNotice"
+              [lastSpaceChangeSummary]="lastSpaceChangeSummary"
+              (selectedActionClose)="clearInspectedFacet()"
+              (selectionChange)="applyActionSelection($event)"
+              (impactCalculate)="calculateImpact()"
+              (timestepClear)="clearTimestepFilter()"
+              (queryChange)="updateQueryValue($event)"
+              (filterChange)="setFilter($event)"
+              (facetSelect)="selectFacet($event)"
+              (showMore)="showMoreFacets()"
+              (showAll)="showAllFacets()"
+              (showFewer)="collapseFacetList()"
+            ></app-planpilot-sidebar-actions>
+          </section>
+        </div>
+
+        @if (canUseSession) {
+          <footer class="session-actions">
+            <div class="history-controls" aria-label="Constraint history">
+              <button
+                type="button"
+                aria-label="Undo constraint change"
+                matTooltip="Undo constraint change"
+                [disabled]="!canUndo"
+                (click)="undoConstraintChange()"
+              >
+                <mat-icon>undo</mat-icon>
+              </button>
+              <button
+                type="button"
+                aria-label="Redo constraint change"
+                matTooltip="Redo constraint change"
+                [disabled]="!canRedo"
+                (click)="redoConstraintChange()"
+              >
+                <mat-icon>redo</mat-icon>
+              </button>
+            </div>
+            <button
+              mat-button
+              type="button"
+              aria-label="Export graph data"
+              [disabled]="!canUseSession || isBusy"
+              (click)="exportGraphDiagnostic()"
+            >
+              <mat-icon>download</mat-icon>Export
+            </button>
+            <button
+              mat-button
+              type="button"
+              [disabled]="!canUseSession || isBusy"
+              matTooltip="Clear every user constraint and restore the initial plan space"
+              (click)="resetSessionView()"
+            >
+              <mat-icon>restart_alt</mat-icon>Clear all
+            </button>
+            <button
+              mat-button
+              type="button"
+              [disabled]="selectionPending"
+              (click)="stopSession()"
+            >
+              <mat-icon>stop_circle</mat-icon>Stop
+            </button>
+          </footer>
+        }
+      </aside>
+    </section>
+  </app-page-content>
+</app-page>

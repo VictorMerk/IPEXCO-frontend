@@ -36,7 +36,7 @@ export class DomainSpecCreatorComponent {
   
     form = this.fb.group({
         name: this.fb.control<string | null>(null, Validators.required),
-        encoding: this.fb.control<Encoding | null>(null, Validators.required),
+        encoding: this.fb.control<Encoding | null>(Encoding.PDDL_CLASSIC, Validators.required),
     });
   
     onCancel(){
@@ -44,6 +44,11 @@ export class DomainSpecCreatorComponent {
     }
   
     onCreate(){
+      if (this.form.invalid) {
+        this.form.markAllAsTouched();
+        return;
+      }
+
       let spec: DomainSpecificationBase = {
         name: this.form.controls.name.value ?? 'TODO',
         encoding: this.form.controls.encoding.value ?? Encoding.NONE,

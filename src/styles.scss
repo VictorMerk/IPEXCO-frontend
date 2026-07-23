@@ -18,3 +18,13 @@ body {
 .mat-mdc-tab-body-wrapper{
   flex-grow: 1;
 }
+
+body.planpilot-fullscreen-open app-navigation {
+  .main-toolbar,
+  mat-sidenav,
+  .mat-drawer-backdrop,
+  app-planpilot-view app-breadcrumb,
+  app-planpilot-view app-page-title {
+    visibility: hidden;
+  }
+}

@@ -8,6 +8,9 @@
                 <mat-form-field appearance="outline">
                     <mat-label>Name</mat-label>
                     <input matInput  [formControl]="form.controls.name">
+                    @if (form.controls.name.hasError('required')) {
+                        <mat-error>Please enter a name</mat-error>
+                    }
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="full-width">
@@ -17,13 +20,15 @@
                         <mat-option [value]="encoding">{{encoding}}</mat-option>
                       }
                     </mat-select>
+                    @if (form.controls.encoding.hasError('required')) {
+                        <mat-error>Please select an encoding</mat-error>
+                    }
                 </mat-form-field>
             </div>
         </form>
     </app-dialog-content>
     <app-dialog-footer>
         <button mat-button (click)="onCancel()">Cancel</button>
-        <button mat-flat-button (click)="onCreate()">Create</button>
+        <button mat-flat-button (click)="onCreate()" [disabled]="form.invalid">Create</button>
     </app-dialog-footer>
 </app-dialog>
-

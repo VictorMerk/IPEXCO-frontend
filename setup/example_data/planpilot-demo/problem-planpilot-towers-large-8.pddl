@@ -1,0 +1,35 @@
+(define (problem planpilot-towers-large-8)
+  (:domain planpilot-towers-large)
+
+  (:objects a b c d e f g h - block)
+
+  (:init
+    (on a b)
+    (on b c)
+    (ontable c)
+    (on d e)
+    (ontable e)
+    (ontable f)
+    (ontable g)
+    (ontable h)
+    (clear a)
+    (clear d)
+    (clear f)
+    (clear g)
+    (clear h)
+    (handempty)
+  )
+
+  (:goal
+    (and
+      (ontable h)
+      (on g h)
+      (on f g)
+      (on e f)
+      (on d e)
+      (on c d)
+      (on b c)
+      (on a b)
+    )
+  )
+)

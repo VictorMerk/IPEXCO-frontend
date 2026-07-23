@@ -11,10 +11,13 @@
       <mat-form-field class="form-inputs ">
         <mat-label>User name</mat-label>
         <input matInput type="text" formControlName="name" />
-        <mat-error *ngIf="minLengthErrorName">
+        <mat-error *ngIf="registerForm.controls.name.hasError('required')">
+          Please enter a user name.
+        </mat-error>
+        <mat-error *ngIf="registerForm.controls.name.hasError('minlength')">
           User name has to have at least 5 characters.
         </mat-error>
-        <mat-error *ngIf="maxLengthErrorName">
+        <mat-error *ngIf="registerForm.controls.name.hasError('maxlength')">
           User name has to have at most 32 characters.
         </mat-error>
       </mat-form-field>
@@ -22,18 +25,24 @@
       <mat-form-field class="form-inputs ">
         <mat-label>Password</mat-label>
         <input matInput type="password" formControlName="password" />
-        <mat-error *ngIf="minLengthErrorPassword">
-          User name has to have at least 8 characters.
+        <mat-error *ngIf="registerForm.controls.password.hasError('required')">
+          Please enter a password.
         </mat-error>
-        <mat-error *ngIf="maxLengthErrorPassword">
-          User name has to have at most 32 characters.
+        <mat-error *ngIf="registerForm.controls.password.hasError('minlength')">
+          Password has to have at least 8 characters.
+        </mat-error>
+        <mat-error *ngIf="registerForm.controls.password.hasError('maxlength')">
+          Password has to have at most 32 characters.
         </mat-error>
       </mat-form-field>
 
       <mat-form-field class="form-inputs ">
         <mat-label>Confirm password</mat-label>
         <input matInput type="password" formControlName="passwordRepeat" />
-        <mat-error *ngIf="notSameErrorPassword">
+        <mat-error *ngIf="registerForm.controls.passwordRepeat.hasError('required')">
+          Please confirm your password.
+        </mat-error>
+        <mat-error *ngIf="registerForm.hasError('notSame')">
           Password and confirm password have to match.
         </mat-error>
       </mat-form-field>
@@ -51,6 +60,7 @@
         <button
           mat-flat-button
           color="primary"
+          [disabled]="registerForm.invalid"
           style="flex-grow: 4; margin-left: 10px"
         >
           Register

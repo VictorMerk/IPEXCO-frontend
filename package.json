@@ -6,6 +6,8 @@
     "start": "ng serve",
     "build": "ng build",
     "test": "ng test",
+    "test:ci": "ng test --watch=false --browsers=ChromeHeadless --source-map=false",
+    "test:planpilot": "ng test --watch=false --browsers=ChromeHeadless --source-map=false --include='src/app/planpilot/**/*.spec.ts'",
     "lint": "ng lint"
   },
   "private": true,
@@ -29,6 +31,7 @@
     "@types/gsap": "^3.0.0",
     "angular-resizable-element": "^7.0.2",
     "codelyzer": "^6.0.2",
+    "cytoscape": "^3.34.0",
     "d3": "^7.8.4",
     "gsap": "^3.2.6",
     "jstat": "^1.9.5",

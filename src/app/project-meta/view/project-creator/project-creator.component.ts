@@ -1,5 +1,6 @@
 import { AsyncPipe } from "@angular/common";
 import { Component, inject } from "@angular/core";
+import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from "@angular/forms";
 import { MatButtonModule } from "@angular/material/button";
 import { MatCardModule } from "@angular/material/card";
@@ -20,7 +21,7 @@ import { ProjectBase } from "src/app/shared/domain/project";
 import { defaultGeneralSetting } from "../../../project/domain/general-settings";
 import { PDDLService } from "../../service/pddl.service";
 import { createProject, loadDomainSpecifications } from "../../state/project-meta.actions";
-import { selectDomainSpecifications } from "../../state/project-meta.selector";
+import { selectDomainSpecifications, selectProjectCreationDone, selectProjectCreationPending } from "../../state/project-meta.selector";
 import { TaskObject } from "src/app/shared/domain/planning-task";
 
 @Component({
@@ -69,7 +70,10 @@ export class ProjectCreatorComponent {
   });
 
   domains$ = this.store.select(selectDomainSpecifications);
-  selectedDomain$ = combineLatest([this.domains$, this.form.controls.domain.valueChanges]).pipe(
+  selectedDomain$ = combineLatest([
+    this.domains$,
+    this.form.controls.domain.valueChanges.pipe(startWith(this.form.controls.domain.value)),
+  ]).pipe(
     map(([domains, domainId]) => domains ? domains.find(d => d._id == domainId) : null),
     shareReplay(1),
   );
@@ -167,9 +171,15 @@ export class ProjectCreatorComponent {
     shareReplay(1),
   )
 
+  projectCreationPending$ = this.store.select(selectProjectCreationPending);
+
   constructor(
   ) {
     this.store.dispatch(loadDomainSpecifications());
+    this.store.select(selectProjectCreationDone).pipe(
+      filter(done => done),
+      takeUntilDestroyed(),
+    ).subscribe(() => this.dialogRef.close());
   }
 
 
@@ -206,6 +216,11 @@ export class ProjectCreatorComponent {
   }
 
   onSave(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
     console.log("onSave");
     combineLatest([this.model$, this.objects$]).pipe(
       tap(console.log),
@@ -231,8 +246,6 @@ export class ProjectCreatorComponent {
         console.log("create new project");
         console.log(newProject);
         this.store.dispatch(createProject({project: newProject}))
-
-        this.dialogRef.close();
       }
     )
   }

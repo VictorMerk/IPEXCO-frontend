@@ -32,6 +32,16 @@
           Start
         </a>
       </app-project-action-card>
+
+      <app-project-action-card>
+        <span action-title>PlanPilot</span>
+        <span action-description>
+          Explore the project plan space.
+        </span>
+        <a mat-button [routerLink]="['/planpilot', (project$ | async)?._id]" action-button>
+          Start
+        </a>
+      </app-project-action-card>
   
 
       <app-project-action-card>
@@ -68,4 +78,3 @@
     </div>
   </app-page-content>
 </app-page>
-

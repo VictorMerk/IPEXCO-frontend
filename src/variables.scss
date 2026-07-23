@@ -35,4 +35,6 @@ $warn: mat.get-theme-color(ipexco-theme.$light-theme, error, 50);
 
 :root {
   @include mat.all-component-themes(ipexco-theme.$light-theme);
+  @include mat.system-level-colors(ipexco-theme.$light-theme);
+  @include mat.system-level-elevation(ipexco-theme.$light-theme);
 }

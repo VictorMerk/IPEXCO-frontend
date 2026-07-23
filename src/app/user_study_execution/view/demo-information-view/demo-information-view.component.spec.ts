@@ -1,6 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideMockStore } from '@ngrx/store/testing';
 
 import { DemoInformationViewComponent } from './demo-information-view.component';
+import {
+  selectExecutionUserStudyDemo,
+  selectExecutionUserStudyDomainSpecification,
+  selectExecutionUserStudyPlanProperties,
+  selectExecutionUserStudyStep
+} from '../../state/user-study-execution.selector';
 
 describe('DemoInformationViewComponent', () => {
   let component: DemoInformationViewComponent;
@@ -8,7 +15,13 @@ describe('DemoInformationViewComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DemoInformationViewComponent]
+      imports: [DemoInformationViewComponent],
+      providers: [provideMockStore({ selectors: [
+        { selector: selectExecutionUserStudyStep, value: null },
+        { selector: selectExecutionUserStudyDemo, value: undefined },
+        { selector: selectExecutionUserStudyPlanProperties, value: undefined },
+        { selector: selectExecutionUserStudyDomainSpecification, value: undefined }
+      ] })]
     })
     .compileComponents();
 

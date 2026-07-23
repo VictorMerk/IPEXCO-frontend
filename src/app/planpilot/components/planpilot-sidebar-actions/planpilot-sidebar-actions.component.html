@@ -1,0 +1,320 @@
+@if (selectedAction; as action) {
+  <section
+    id="planpilot-selected-action"
+    class="selected-facet selected-action-panel inspector-card"
+    data-testid="planpilot-selected-action-panel"
+    aria-labelledby="planpilot-selected-action-name"
+  >
+    <div class="section-heading">
+      <span
+        ><small class="section-label">Selected action</small
+        ><strong id="planpilot-selected-action-name" class="facet-name">{{
+          action.facet.label
+        }}</strong></span
+      >
+      <button
+        type="button"
+        class="close-selection"
+        aria-label="Close selected action"
+        matTooltip="Close selected action"
+        (click)="selectedActionClose.emit()"
+      >
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+    <span class="facet-state"
+      >{{ action.timestepLabel }} · {{ action.stateLabel }}</span
+    >
+    @if (action.canRequire || action.canForbid || action.canClear) {
+      <div class="facet-actions">
+        <button
+          mat-stroked-button
+          type="button"
+          class="require-action"
+          [class.active]="action.facet.selection === 'positive'"
+          [disabled]="!action.canRequire || isBusy"
+          matTooltip="Keep this action in every remaining plan"
+          (click)="
+            selectionChange.emit({
+              facetId: action.facet.id,
+              selection: 'positive',
+            })
+          "
+        >
+          <mat-icon>check</mat-icon><span>Require</span>
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          class="forbid-action"
+          [class.active]="action.facet.selection === 'negative'"
+          [disabled]="!action.canForbid || isBusy"
+          matTooltip="Remove plans that use this action"
+          (click)="
+            selectionChange.emit({
+              facetId: action.facet.id,
+              selection: 'negative',
+            })
+          "
+        >
+          <mat-icon>block</mat-icon><span>Forbid</span>
+        </button>
+        <button
+          mat-button
+          type="button"
+          class="clear-action"
+          [disabled]="!action.canClear || isBusy"
+          [matTooltip]="action.clearHint"
+          (click)="
+            selectionChange.emit({
+              facetId: action.facet.id,
+              selection: 'neutral',
+            })
+          "
+        >
+          <mat-icon>restart_alt</mat-icon><span>Remove constraint</span>
+        </button>
+      </div>
+    } @else {
+      <span class="analysis-empty"
+        >This action is fixed in the current plan space.</span
+      >
+    }
+    <div class="facet-impact" data-testid="planpilot-facet-impact">
+      <div class="impact-heading">
+        <strong>Preview impact</strong>
+        <small
+          >Require keeps plans with this action; Forbid keeps plans without
+          it.</small
+        >
+      </div>
+      @if (!impactCalculated) {
+        <button
+          type="button"
+          class="compact-text-action"
+          [disabled]="isBusy || !action.canPreviewImpact"
+          (click)="impactCalculate.emit()"
+        >
+          @if (impactLoading) {
+            <mat-icon class="spinning-icon">sync</mat-icon>
+          }
+          Preview impact
+        </button>
+      } @else if (
+        action.requireImpact !== undefined || action.forbidImpact !== undefined
+      ) {
+        <div class="impact-grid">
+          <span>
+            <small>If required</small>
+            @if (action.requireImpact; as requireImpact) {
+              @if (requireImpact.plansRemaining !== null) {
+                <strong
+                  >{{ requireImpact.plansRemaining
+                  }}{{
+                    requireImpact.totalPlans === null
+                      ? ""
+                      : " of " + requireImpact.totalPlans
+                  }}
+                  plan{{
+                    (requireImpact.totalPlans ??
+                      requireImpact.plansRemaining) === 1
+                      ? ""
+                      : "s"
+                  }}
+                  left</strong
+                >
+                @if (requireImpact.plansRemoved !== null) {
+                  <small
+                    >{{ requireImpact.plansRemoved }} removed ·
+                    {{ requireImpact.reductionPercent }}%</small
+                  >
+                } @else {
+                  <small>Compared with a different constraint set</small>
+                }
+              } @else if (requireImpact.available === true) {
+                <strong>Plan available</strong>
+                <small>Exact count not available</small>
+              } @else if (requireImpact.available === false) {
+                <strong>No valid plan</strong>
+              } @else {
+                <strong>Not available</strong>
+              }
+            } @else {
+              <strong>Not available</strong>
+            }
+          </span>
+          <span>
+            <small>If forbidden</small>
+            @if (action.forbidImpact; as forbidImpact) {
+              @if (forbidImpact.plansRemaining !== null) {
+                <strong
+                  >{{ forbidImpact.plansRemaining
+                  }}{{
+                    forbidImpact.totalPlans === null
+                      ? ""
+                      : " of " + forbidImpact.totalPlans
+                  }}
+                  plan{{
+                    (forbidImpact.totalPlans ?? forbidImpact.plansRemaining) ===
+                    1
+                      ? ""
+                      : "s"
+                  }}
+                  left</strong
+                >
+                @if (forbidImpact.plansRemoved !== null) {
+                  <small
+                    >{{ forbidImpact.plansRemoved }} removed ·
+                    {{ forbidImpact.reductionPercent }}%</small
+                  >
+                } @else {
+                  <small>Compared with a different constraint set</small>
+                }
+              } @else if (forbidImpact.available === true) {
+                <strong>Plan available</strong>
+                <small>Exact count not available</small>
+              } @else if (forbidImpact.available === false) {
+                <strong>No valid plan</strong>
+              } @else {
+                <strong>Not available</strong>
+              }
+            } @else {
+              <strong>Not available</strong>
+            }
+          </span>
+        </div>
+      } @else {
+        <span class="analysis-empty"
+          >Impact is not available for this fixed action.</span
+        >
+      }
+      @if (impactError) {
+        <span class="analysis-error">{{ impactError }}</span>
+      }
+      @if (impactCalculated && impactNotice) {
+        <span class="analysis-note">{{ impactNotice }}</span>
+      }
+    </div>
+  </section>
+}
+
+<div class="section-heading">
+  <div>
+    <span class="section-label">Plan space</span><strong>Actions</strong>
+  </div>
+  <span
+    class="result-count"
+    data-testid="planpilot-action-result-count"
+    [attr.data-rendered-count]="rows.length"
+    [attr.data-matching-count]="matchingCount"
+    >{{
+      rows.length === matchingCount
+        ? matchingCount
+        : rows.length + " of " + matchingCount
+    }}
+    shown</span
+  >
+</div>
+@if (activeTimestep !== null) {
+  <div class="active-timestep-filter">
+    <span>{{
+      activeTimestep === "any" ? "Flexible steps" : "t" + activeTimestep
+    }}</span>
+    <button
+      type="button"
+      (click)="timestepClear.emit()"
+      aria-label="Clear timestep filter"
+    >
+      <mat-icon>close</mat-icon>Clear
+    </button>
+  </div>
+}
+<label class="search-control" for="planpilot-facet-search">
+  <mat-icon>search</mat-icon>
+  <input
+    id="planpilot-facet-search"
+    type="search"
+    [value]="query"
+    (input)="updateQuery($event)"
+    placeholder="Search action or timestep"
+  />
+</label>
+<div class="filter-row" role="group" aria-label="Action filters">
+  @for (filter of filters; track filter.value) {
+    <button
+      type="button"
+      [class.active]="activeFilter === filter.value"
+      [attr.aria-pressed]="activeFilter === filter.value"
+      (click)="filterChange.emit(filter.value)"
+    >
+      <span>{{ filter.label }}</span
+      ><small>{{ filter.count }}</small>
+    </button>
+  }
+</div>
+<div class="facet-results">
+  @for (row of rows; track row.facet.id) {
+    <button
+      type="button"
+      class="facet-result"
+      [attr.data-facet-id]="row.facet.id"
+      [class.selected]="row.selected"
+      [class.displayed-plan]="row.displayedPlan"
+      [class.user-required]="row.required"
+      [class.user-forbidden]="row.forbidden"
+      [class.context-only]="!row.facet.available"
+      (click)="facetSelect.emit(row.facet.id)"
+    >
+      <span
+        ><strong>{{ row.facet.label }}</strong
+        ><small>{{ row.timestepLabel }} · {{ row.stateLabel }}</small></span
+      >
+      @if (row.facet.selection === "positive") {
+        <mat-icon>check</mat-icon>
+      }
+      @if (row.facet.selection === "negative") {
+        <mat-icon>block</mat-icon>
+      }
+      @if (row.selected && row.facet.selection === "neutral") {
+        <mat-icon class="inspection-marker">chevron_right</mat-icon>
+      }
+    </button>
+  } @empty {
+    <div class="inspector-placeholder">
+      <mat-icon>search_off</mat-icon><span>No matching actions.</span>
+    </div>
+  }
+  @if (hiddenCount) {
+    <button
+      mat-stroked-button
+      type="button"
+      class="show-more-facets"
+      (click)="showMore.emit()"
+    >
+      Show {{ hiddenCount > 40 ? 40 : hiddenCount }} more
+    </button>
+    <button
+      mat-button
+      type="button"
+      class="show-more-facets"
+      (click)="showAll.emit()"
+    >
+      Show all {{ matchingCount }}
+    </button>
+  } @else if (matchingCount > 40) {
+    <button
+      mat-button
+      type="button"
+      class="show-more-facets"
+      (click)="showFewer.emit()"
+    >
+      Show fewer
+    </button>
+  }
+</div>
+
+@if (lastSpaceChangeSummary) {
+  <p class="space-change-summary">
+    <mat-icon>account_tree</mat-icon><span>{{ lastSpaceChangeSummary }}</span>
+  </p>
+}

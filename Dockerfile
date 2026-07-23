@@ -1,18 +1,20 @@
 # Stage 1: Compile and Build angular codebase
 
 # Use official node image as the base image
-FROM node:latest as build
+FROM node:22 AS build
 
 # Set the working directory
 WORKDIR /usr/local/app
 
+# Install all the dependencies
+COPY package.json package-lock.json ./
+RUN npm ci
+
 # Add the source code to app
 COPY ./ /usr/local/app/
 
-# Install all the dependencies
-RUN npm install
 # Generate the build of the application
-RUN npm run build --configuration=production --force
+RUN npm run build -- --configuration=production
 
 
 # Stage 2: Serve app with nginx server

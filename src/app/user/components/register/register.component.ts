@@ -1,5 +1,5 @@
 import { AuthenticationService } from "../../../user/services/authentication.service";
-import { Component, inject, OnInit } from "@angular/core";
+import { Component, inject } from "@angular/core";
 import { FormBuilder, FormsModule, ReactiveFormsModule, UntypedFormControl, UntypedFormGroup, Validators } from "@angular/forms";
 import { User } from "src/app/user/domain/user";
 import { passwordValidator } from "src/app/validators/user.validators";
@@ -35,7 +35,7 @@ import { MatButtonModule } from "@angular/material/button";
     templateUrl: "./register.component.html",
     styleUrls: ["./register.component.scss"]
 })
-export class RegisterComponent implements OnInit {
+export class RegisterComponent {
 
   fb = inject(FormBuilder);
 
@@ -88,9 +88,11 @@ export class RegisterComponent implements OnInit {
     );
   }
 
-  ngOnInit(): void {}
-
   onRegister(): void {
+    if (this.registerForm.invalid) {
+      this.registerForm.markAllAsTouched();
+      return;
+    }
 
     const name = this.registerForm.controls.name.value;
     const password = this.registerForm.controls.password.value;

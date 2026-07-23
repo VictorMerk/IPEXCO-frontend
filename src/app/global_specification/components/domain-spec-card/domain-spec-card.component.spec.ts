@@ -14,6 +14,7 @@ describe('DomainSpecCardComponent', () => {
 
     fixture = TestBed.createComponent(DomainSpecCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('spec', { name: 'Test specification' });
     fixture.detectChanges();
   });
 

@@ -14,6 +14,7 @@ describe('PlanPropertyUpdatePanelComponent', () => {
 
     fixture = TestBed.createComponent(PlanPropertyUpdatePanelComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('property', null);
     fixture.detectChanges();
   });
 

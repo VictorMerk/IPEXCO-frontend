@@ -14,6 +14,8 @@ describe('PropertyTemplateNumericPartComponent', () => {
 
     fixture = TestBed.createComponent(PropertyTemplateNumericPartComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('isSelected', false);
+    fixture.componentRef.setInput('selectedValue', '0');
     fixture.detectChanges();
   });
 

@@ -14,7 +14,6 @@ import { combineLatest, filter, map, startWith, take } from "rxjs";
 import { filterNotNullOrUndefined } from "src/app/shared/common/check_null_undefined";
 import { InfoModule } from "src/app/shared/components/info/info.module";
 import { SideSheetModule } from "src/app/shared/components/side-sheet/side-sheet.module";
-import { isNonEmptyValidator } from "src/app/validators/non-empty.validator";
 import { PlanPropertyPanelComponent } from "../../../shared/components/plan-property-panel/plan-property-panel.component";
 import { SelectPropertyComponent } from "../../components/select-property/select-property.component";
 import { ProjectDirective } from "../../directives/isProject.directive";
@@ -71,9 +70,9 @@ export class CreateIterationComponent {
 
   form = this.fb.group({
     general: this.fb.group({
-      name: this.fb.control<string>("", Validators.required),
+      name: this.fb.control<string>("", [Validators.required, Validators.pattern(/\S/)]),
     }),
-    enforcedGoalIds: this.fb.array<FormControl<string |  null>>([], [isNonEmptyValidator]),
+    enforcedGoalIds: this.fb.array<FormControl<string |  null>>([]),
     softGoalIds: this.fb.array<FormControl<string | null>>([]),
   });
 
@@ -180,6 +179,11 @@ export class CreateIterationComponent {
   }
 
   onSubmit(): void {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
      combineLatest([
       this.store.select(selectIterativePlanningNewStepBase),
       this.store.select(selectIterativePlanningProject),
@@ -194,7 +198,7 @@ export class CreateIterationComponent {
       const enforcedGoalIds = this.form.controls.enforcedGoalIds.value.filter(pp => pp !== null);
       
       const newStep: IterationStepBase = {
-        name: this.form.controls.general.controls.name.value ?? 'TODO',
+        name: this.form.controls.general.controls.name.value?.trim() || 'Step',
         hardGoals: enforcedGoalIds,
         softGoals: isDemo ? planPropertiesIds.filter(ppId => !enforcedGoalIds.includes(ppId)) : this.form.controls.softGoalIds.value.filter(pp => pp !== null),
         project: project._id,
@@ -203,10 +207,8 @@ export class CreateIterationComponent {
         predecessorStep: baseStep?._id ?? null,
       }
 
-      console.log(newStep)
       this.store.dispatch(createIterationStep({iterationStep: newStep}))
     });
      
   }
 }
-

@@ -14,6 +14,8 @@ describe('ServiceCardComponent', () => {
 
     fixture = TestBed.createComponent(ServiceCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('service', { name: 'Test service' });
+    fixture.componentRef.setInput('domains', []);
     fixture.detectChanges();
   });
 

@@ -13,7 +13,6 @@ import { PageModule } from "src/app/shared/components/page/page.module";
 
 import { ExplanationInterfaceType } from "src/app/project/domain/general-settings";
 import { PlanViewComponent } from "../../components/plan/plan-view/plan-view.component";
-import { PlanRunStatus } from "../../domain/plan";
 import { initNewIterationStep } from "../../state/iterative-planning.actions";
 import {
   selectIterativePlanningProjectExplanationInterfaceType,

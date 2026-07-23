@@ -1,6 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { provideMockStore } from '@ngrx/store/testing';
 
 import { PlansListViewComponent } from './plans-list-view.component';
+import { selectPlans, selectProject, selectSupportedPlanners } from '../../state/planning.selector';
 
 describe('PlansListViewComponent', () => {
   let component: PlansListViewComponent;
@@ -8,7 +11,15 @@ describe('PlansListViewComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PlansListViewComponent]
+      imports: [PlansListViewComponent],
+      providers: [
+        provideMockStore({ selectors: [
+          { selector: selectProject, value: undefined },
+          { selector: selectPlans, value: [] },
+          { selector: selectSupportedPlanners, value: [] }
+        ] }),
+        provideRouter([])
+      ]
     })
     .compileComponents();
 

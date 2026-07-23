@@ -14,6 +14,8 @@ describe('DemoInfoCardComponent', () => {
 
     fixture = TestBed.createComponent(DemoInfoCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('step', { type: 'demo-info', name: 'Demo information', time: 1 });
+    fixture.componentRef.setInput('demos', []);
     fixture.detectChanges();
   });
 

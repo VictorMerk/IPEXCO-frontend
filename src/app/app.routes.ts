@@ -95,6 +95,11 @@ export const routes: Routes = [
         canActivate: [AuthGuard],
       },
       {
+        path: 'planpilot',
+        loadChildren: () => import('./planpilot/planpilot.routes').then(m => m.routes),
+        canActivate: [AuthGuard],
+      },
+      {
         path: 'planning',
         loadChildren: () => import('./planning/planning.routes').then(m => m.routes),
         canActivate: [AuthGuard],

@@ -14,6 +14,8 @@ describe('BelugaPlanAnimationComponent', () => {
 
     fixture = TestBed.createComponent(BelugaPlanAnimationComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('plan', { actions: [] });
+    fixture.componentRef.setInput('model', {});
     fixture.detectChanges();
   });
 

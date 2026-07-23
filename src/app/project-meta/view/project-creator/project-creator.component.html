@@ -6,7 +6,7 @@
   </app-dialog-header>
   <app-dialog-content>
 
-    <mat-stepper linear=true #stepper [selectedIndex]="selectedIndex">
+    <mat-stepper [linear]="true" #stepper [selectedIndex]="selectedIndex" (selectedIndexChange)="selectedIndex = $event">
       <mat-step label="Main">
         <div class="stepper-content">
           <form
@@ -44,7 +44,7 @@
             <app-spec-card-feature>{{ (selectedDomain$ | async)?.encoding }}</app-spec-card-feature>
           </div>
 
-          @if((selectedDomain$ | async)?.encoding == encoding.PDDL_CLASSIC ){
+          @if((selectedDomain$ | async)?.encoding === encoding.PDDL_CLASSIC ){
             <app-template-file-upload 
               (fileContent)="onDomainSelected($event)"
               [valid]="pddlModelValid$ | async"
@@ -58,11 +58,11 @@
             </app-template-file-upload>
           }
 
-          @if((selectedDomain$ | async)?.encoding == encoding.PDDL_NUMERIC){
+          @if((selectedDomain$ | async)?.encoding === encoding.PDDL_NUMERIC){
             <p>Not supported yet!</p>
           }
 
-          @if((selectedDomain$ | async)?.encoding == encoding.DOMAIN_DEPENDENT ){
+          @if((selectedDomain$ | async)?.encoding === encoding.DOMAIN_DEPENDENT ){
             <app-template-file-upload 
               (fileContent)="onTaskSelected($event)"
               [valid]="domainDependentModelValid$ | async">
@@ -78,9 +78,9 @@
   </app-dialog-content>
   <app-dialog-footer>
     <button mat-button (click)="onCancel()">Cancel</button>
-    <button mat-button (click)="onPrevious()" [disabled]="selectedIndex == 0">Back</button>
-    @if(selectedIndex == maxStepIndex){
-      <button mat-flat-button color="primary" (click)="onSave()" [disabled]="!(modelValid && form.valid)">
+    <button mat-button (click)="onPrevious()" [disabled]="selectedIndex === 0">Back</button>
+    @if(selectedIndex === maxStepIndex){
+      <button mat-flat-button color="primary" (click)="onSave()" [disabled]="!(modelValid && form.valid) || (projectCreationPending$ | async)">
         Create
       </button>
     }

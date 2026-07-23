@@ -1,8 +1,9 @@
 import { inject, Injectable } from "@angular/core";
 import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree } from "@angular/router";
 import { Store } from "@ngrx/store";
-import { selectIsUserStudy, selectLoggedIn } from "../user/state/user.selector";
-import { combineLatest, map, Observable, take } from "rxjs";
+import { selectIsUserStudy, selectLoggedIn, selectTokenLoadingState } from "../user/state/user.selector";
+import { combineLatest, filter, map, Observable, take } from "rxjs";
+import { LoadingState } from "../shared/common/loadable.interface";
 
 @Injectable({
   providedIn: "root",
@@ -21,11 +22,16 @@ export class AuthGuard  {
 
   checkLogin(): Observable<boolean | UrlTree> {
 
-    return combineLatest([this.store.select(selectLoggedIn), this.store.select(selectIsUserStudy)]).pipe(
+    return combineLatest([
+      this.store.select(selectLoggedIn),
+      this.store.select(selectIsUserStudy),
+      this.store.select(selectTokenLoadingState),
+    ]).pipe(
+      filter(([, , tokenState]) => tokenState !== LoadingState.Initial),
       take(1),
       map(([isLoggedIn, isUserStudy]) => {
-        console.log("Auth guard: logged in: " + isLoggedIn + " userStudy: " + isUserStudy);
-        if(isLoggedIn && ! isUserStudy){
+        const hasStoredToken = !!localStorage.getItem("jwt-token");
+        if((isLoggedIn || hasStoredToken) && ! isUserStudy){
           return true;
         }
         if(isUserStudy){

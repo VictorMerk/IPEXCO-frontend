@@ -14,6 +14,8 @@ describe('ToolDescriptionCardComponent', () => {
 
     fixture = TestBed.createComponent(UserManualCardComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('step', { type: 'user-manual', name: 'User manual', time: 1 });
+    fixture.componentRef.setInput('demos', []);
     fixture.detectChanges();
   });
 

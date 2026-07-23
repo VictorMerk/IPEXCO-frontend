@@ -57,3 +57,4 @@ launch-chromium
 #local setup
 setup/local*
 beluga_demonstrator/local*
+setup/planpilot-local/.runtime/

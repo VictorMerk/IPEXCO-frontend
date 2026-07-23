@@ -11,6 +11,9 @@ export const selectProjectsMetaData = createSelector(selectState, (state) => sta
 export const selectProjectCreationPending = createSelector(selectState, 
     (state) => state.createdProject.state === CreationState.Pending)
 
+export const selectProjectCreationDone = createSelector(selectState,
+    (state) => state.createdProject.state === CreationState.Done)
+
 
 export const selectProjectCreationNone = createSelector(selectState, 
     (state) => state.createdProject.state === CreationState.Default || 

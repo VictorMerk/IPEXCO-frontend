@@ -1,8 +1,9 @@
 import { inject, Injectable } from "@angular/core";
 import { ActivatedRouteSnapshot, Router, RouterStateSnapshot, UrlTree } from "@angular/router";
 import { Store } from "@ngrx/store";
-import { selectLoggedIn } from "../user/state/user.selector";
-import { map, Observable, take } from "rxjs";
+import { selectLoggedIn, selectTokenLoadingState } from "../user/state/user.selector";
+import { combineLatest, filter, map, Observable, take } from "rxjs";
+import { LoadingState } from "../shared/common/loadable.interface";
 
 @Injectable({
   providedIn: "root",
@@ -21,10 +22,15 @@ export class ToHomeGuard  {
 
   checkLogin(): Observable<boolean | UrlTree> {
 
-    return this.store.select(selectLoggedIn).pipe(take(1)).pipe(
-      map(isLoggedIn => {
-        console.log("To Home guard: logged in: " + isLoggedIn);
-        if(isLoggedIn){
+    return combineLatest([
+      this.store.select(selectLoggedIn),
+      this.store.select(selectTokenLoadingState),
+    ]).pipe(
+      filter(([, tokenState]) => tokenState !== LoadingState.Initial),
+      take(1),
+      map(([isLoggedIn]) => {
+        const hasStoredToken = !!localStorage.getItem("jwt-token");
+        if(isLoggedIn || hasStoredToken){
           return true;
         }
         else {

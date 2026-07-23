@@ -135,6 +135,10 @@ export class StepDetailViewComponent {
     filter((step) => !!step),
     map((step) => step.plan?.status == PlanRunStatus.FAILED)
   );
+  isSolved$ = this.step$.pipe(
+    filter((step) => !!step),
+    map((step) => step.plan?.status == PlanRunStatus.SOLVED)
+  );
 
   planProperties$ = this.store.select(selectIterativePlanningProperties);
 

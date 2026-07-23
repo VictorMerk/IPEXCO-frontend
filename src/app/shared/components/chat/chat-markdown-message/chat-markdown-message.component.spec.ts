@@ -14,6 +14,8 @@ describe('ChatMarkdownMessageComponent', () => {
 
     fixture = TestBed.createComponent(ChatMarkdownMessageComponent);
     component = fixture.componentInstance;
+    fixture.componentRef.setInput('role', 'sender');
+    fixture.componentRef.setInput('rawMessage', 'Test message');
     fixture.detectChanges();
   });
 
