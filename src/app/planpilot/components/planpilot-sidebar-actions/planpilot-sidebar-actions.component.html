@@ -25,6 +25,9 @@
     <span class="facet-state"
       >{{ action.timestepLabel }} · {{ action.stateLabel }}</span
     >
+    @if (action.unavailableReason) {
+      <span class="analysis-note">{{ action.unavailableReason }}</span>
+    }
     @if (action.canRequire || action.canForbid || action.canClear) {
       <div class="facet-actions">
         <button
@@ -89,17 +92,28 @@
         >
       </div>
       @if (!impactCalculated) {
-        <button
-          type="button"
-          class="compact-text-action"
-          [disabled]="isBusy || !action.canPreviewImpact"
-          (click)="impactCalculate.emit()"
-        >
-          @if (impactLoading) {
-            <mat-icon class="spinning-icon">sync</mat-icon>
+        <div class="impact-controls">
+          <button
+            type="button"
+            class="compact-text-action"
+            [disabled]="isBusy || !action.canPreviewImpact"
+            (click)="impactCalculate.emit()"
+          >
+            @if (impactLoading) {
+              <mat-icon class="spinning-icon">sync</mat-icon>
+            }
+            {{ impactLoading ? "Calculating…" : "Preview impact" }}
+          </button>
+          @if (impactLoading && canCancelOperation) {
+            <button
+              type="button"
+              class="compact-text-action operation-cancel"
+              (click)="operationCancel.emit()"
+            >
+              Cancel
+            </button>
           }
-          Preview impact
-        </button>
+        </div>
       } @else if (
         action.requireImpact !== undefined || action.forbidImpact !== undefined
       ) {
@@ -263,6 +277,12 @@
       [class.user-required]="row.required"
       [class.user-forbidden]="row.forbidden"
       [class.context-only]="!row.facet.available"
+      [attr.title]="row.unavailableReason || null"
+      [class.linked-hover]="hoveredFacetId === row.facet.id"
+      (mouseenter)="facetHover.emit(row.facet.id)"
+      (mouseleave)="facetHover.emit(undefined)"
+      (focus)="facetHover.emit(row.facet.id)"
+      (blur)="facetHover.emit(undefined)"
       (click)="facetSelect.emit(row.facet.id)"
     >
       <span

@@ -160,6 +160,53 @@
   font-size: 0.72rem;
 }
 
+.graph-comparison-bar {
+  display: flex;
+  min-height: 30px;
+  gap: var(--spacing-100);
+  align-items: center;
+  padding: 0 var(--spacing-100);
+  border-top: 1px solid var(--mat-sys-outline-variant);
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.72rem;
+}
+
+.graph-comparison-bar span {
+  display: inline-flex;
+  gap: var(--spacing-050);
+  align-items: center;
+}
+
+.compare-key {
+  display: inline-block;
+  width: 14px;
+  height: 8px;
+  border: 1px solid rgb(255 255 255 / 65%);
+  border-radius: 2px;
+  background: #334155;
+}
+
+.compare-key.moved {
+  background: #f59e0b;
+}
+
+.compare-key.only-a {
+  background: #c026d3;
+}
+
+.compare-key.only-b {
+  background: #0284c7;
+}
+
+.graph-comparison-bar button {
+  margin-left: auto;
+  border: 0;
+  color: var(--mat-sys-primary);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
 .operation-status {
   display: inline-flex;
   min-width: 0;
@@ -174,6 +221,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.operation-status button {
+  min-height: 26px;
+  padding: 0 var(--spacing-050);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .operation-status mat-icon,

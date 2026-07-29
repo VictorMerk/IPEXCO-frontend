@@ -34,6 +34,7 @@ export interface PlanPilotGraphFacet {
   userConstraint?: boolean;
   abstractTimeStep?: boolean;
   visualState: PlanPilotGraphVisualState;
+  comparisonState?: 'same' | 'moved' | 'only-a' | 'only-b';
 }
 
 export interface PlanPilotGraphConnection {
@@ -102,8 +103,11 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
   @Input() facets: PlanPilotGraphFacet[] = [];
   @Input() connections: PlanPilotGraphConnection[] = [];
   @Input() selectedFacetId?: string;
+  @Input() hoveredFacetId?: string;
+  @Input() highlightedTimestep: number | 'any' | null = null;
   @Input() horizon = 0;
   @Output() facetSelected = new EventEmitter<PlanPilotGraphTap>();
+  @Output() facetHovered = new EventEmitter<string | undefined>();
 
   @ViewChild('graphContainer', { static: true }) graphContainer!: ElementRef<HTMLDivElement>;
 
@@ -132,9 +136,16 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
       const facetId = event.target.id();
       this.facetSelected.emit({ ...this.tapPosition(event), facetId });
     });
+    this.graph.on('mouseover', 'node.facet', (event: EventObject) => {
+      this.facetHovered.emit(event.target.id());
+    });
+    this.graph.on('mouseout', 'node.facet', () => {
+      this.facetHovered.emit(undefined);
+    });
     this.graph.on('zoom', () => this.updatePlanEdgeWidth());
 
     this.applySelection();
+    this.applyInteractionClasses();
     this.updatePlanEdgeWidth();
     this.lastStructureSignature = this.structureSignature();
     this.resizeObserver = new ResizeObserver(() => this.resizeGraph());
@@ -158,6 +169,7 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
     }
 
     this.applySelection();
+    this.applyInteractionClasses();
   }
 
   ngOnDestroy(): void {
@@ -324,6 +336,27 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
     }
   }
 
+  private applyInteractionClasses(): void {
+    if (!this.graph) {
+      return;
+    }
+    const nodes = this.graph.nodes('.facet');
+    nodes.removeClass('linked-hover timestep-highlight');
+    if (this.hoveredFacetId) {
+      this.graph.getElementById(this.hoveredFacetId).addClass('linked-hover');
+    }
+    if (this.highlightedTimestep !== null) {
+      nodes
+        .filter((node) =>
+          this.highlightedTimestep === 'any'
+            ? node.data('abstractTimeStep') === true
+            : node.data('abstractTimeStep') !== true &&
+              node.data('timestep') === this.highlightedTimestep,
+        )
+        .addClass('timestep-highlight');
+    }
+  }
+
   private rebuildGraph(): void {
     if (!this.graph) {
       return;
@@ -352,7 +385,7 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
         return;
       }
 
-      node.removeClass('positive negative neutral root goal time displayed-plan required forbidden alternative implied empty unavailable query solution-path user-constraint');
+      node.removeClass('positive negative neutral root goal time displayed-plan required forbidden alternative implied empty unavailable query solution-path user-constraint comparison-same comparison-moved comparison-only-a comparison-only-b');
       node.addClass(`facet ${facet.selection} ${this.groupClass(facet)}`);
       node.data('label', this.nodeLabel(facet));
     });
@@ -386,6 +419,8 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
       data: {
         id: facet.id,
         label: this.nodeLabel(facet),
+        timestep: facet.timestep,
+        abstractTimeStep: Boolean(facet.abstractTimeStep),
       },
       position: positions[facet.id],
       classes: `facet ${facet.selection} ${this.groupClass(facet)}`,
@@ -419,6 +454,7 @@ export class PlanPilotGraphComponent implements AfterViewInit, OnChanges, OnDest
       visualState,
       visualState === 'displayed-plan' ? 'solution-path' : '',
       facet.userConstraint ? 'user-constraint' : '',
+      facet.comparisonState ? `comparison-${facet.comparisonState}` : '',
     ].filter(Boolean).join(' ');
   }
 

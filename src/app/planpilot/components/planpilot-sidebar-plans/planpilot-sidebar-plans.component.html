@@ -33,6 +33,44 @@
         <span><mat-icon class="spinning-icon">sync</mat-icon>Loading</span>
       }
     </div>
+    <div class="plan-batch-loader" data-testid="planpilot-plan-batch-loader">
+      <span>
+        <strong>{{ loadedPlanCount }} loaded</strong>
+        <small>
+          {{ solutionCountKnown ? "of " + solutionCount : "total not counted" }}
+        </small>
+      </span>
+      @if (planBatchLoading) {
+        <span class="batch-progress">
+          <mat-icon class="spinning-icon">sync</mat-icon>
+          Loading {{ nextPlanBatchStart }}–{{ nextPlanBatchEnd }}
+        </span>
+        @if (canCancelOperation) {
+          <button
+            mat-button
+            type="button"
+            class="operation-cancel"
+            (click)="operationCancel.emit()"
+          >
+            Cancel
+          </button>
+        }
+      } @else if (hasMorePlanBatches) {
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="isBusy"
+          (click)="planBatchLoad.emit()"
+        >
+          Load next {{ nextPlanBatchEnd - nextPlanBatchStart + 1 }}
+        </button>
+      } @else {
+        <small>All plans loaded</small>
+      }
+      @if (planBatchError) {
+        <small class="analysis-error">{{ planBatchError }}</small>
+      }
+    </div>
     @if (planSummaries.length) {
       <div class="plan-summary-list">
         @for (summary of planSummaries; track summary.number) {
@@ -119,6 +157,7 @@
         [attr.max]="solutionCountKnown ? solutionCount : null"
         [value]="currentSolutionNumber || 1"
         [disabled]="isBusy"
+        (input)="updateRequestedPlan($event)"
         [attr.title]="
           solutionCountKnown
             ? null
@@ -127,6 +166,13 @@
       />
       <button mat-stroked-button type="submit" [disabled]="isBusy">Open</button>
     </form>
+    @if (jumpNeedsWarning) {
+      <small class="plan-jump-warning">
+        <mat-icon>warning_amber</mat-icon>
+        Plan {{ requestedPlanNumber }} is not loaded yet. PlanPilot generates
+        plans in order, so opening a high number can take some time.
+      </small>
+    }
 
     <details class="solution-action-list">
       <summary>
@@ -189,6 +235,31 @@
       </div>
       @if (comparison; as result) {
         <div class="comparison-result">
+          <div class="comparison-switch">
+            <button
+              type="button"
+              [disabled]="isBusy"
+              (click)="comparisonPlanShow.emit(comparisonPlanA)"
+            >
+              Show A
+            </button>
+            <button
+              type="button"
+              [disabled]="isBusy"
+              (click)="comparisonPlanShow.emit(comparisonPlanB)"
+            >
+              Show B
+            </button>
+          </div>
+          @if (comparisonGraphActive) {
+            <span class="comparison-graph-note">
+              Differences are highlighted in the graph. Arrows still show the
+              displayed plan.
+              <button type="button" (click)="graphComparisonClear.emit()">
+                Hide highlights
+              </button>
+            </span>
+          }
           @if (!comparisonHasChanges) {
             <span>The plans use the same actions at the same timesteps.</span>
           }

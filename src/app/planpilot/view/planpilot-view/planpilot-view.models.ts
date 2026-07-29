@@ -28,6 +28,7 @@ export interface PlanPilotUiFacet {
   solutionContext?: boolean;
   userConstraint?: boolean;
   meta?: string;
+  comparisonState?: 'same' | 'moved' | 'only-a' | 'only-b';
 }
 
 export interface PendingFacetSelection {

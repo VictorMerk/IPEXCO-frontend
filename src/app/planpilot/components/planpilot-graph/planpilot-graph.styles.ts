@@ -173,6 +173,54 @@ export const PLANPILOT_GRAPH_STYLES: StylesheetJson = [
     },
   },
   {
+    selector: "node.linked-hover",
+    style: {
+      "overlay-color": "#334155",
+      "overlay-opacity": 0.12,
+      "overlay-padding": 7,
+    },
+  },
+  {
+    selector: "node.timestep-highlight",
+    style: {
+      "underlay-color": "#64748b",
+      "underlay-opacity": 0.1,
+      "underlay-padding": 10,
+    },
+  },
+  {
+    selector: "node.comparison-same",
+    style: {
+      "underlay-color": "#334155",
+      "underlay-opacity": 0.78,
+      "underlay-padding": 8,
+    },
+  },
+  {
+    selector: "node.comparison-moved",
+    style: {
+      "underlay-color": "#f59e0b",
+      "underlay-opacity": 0.9,
+      "underlay-padding": 10,
+    },
+  },
+  {
+    selector: "node.comparison-only-a",
+    style: {
+      "underlay-color": "#c026d3",
+      "underlay-opacity": 0.88,
+      "underlay-padding": 10,
+    },
+  },
+  {
+    selector: "node.comparison-only-b",
+    style: {
+      "underlay-color": "#0284c7",
+      "underlay-opacity": 0.88,
+      "underlay-padding": 10,
+    },
+  },
+  {
     selector: "edge",
     style: {
       "curve-style": "taxi",

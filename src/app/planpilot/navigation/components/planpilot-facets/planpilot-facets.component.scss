@@ -22,12 +22,36 @@
   }
 }
 
+.session-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.75rem;
+  padding: 0.75rem 0;
+  border-block: 1px solid var(--mat-sys-outline-variant);
+
+  small {
+    flex-basis: 100%;
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
+.analysis-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+
+  small {
+    color: var(--mat-sys-on-surface-variant);
+  }
+}
+
 .remaining {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 
-  // While recalculating, fade the now-stale numbers/plans.
   &--recalculating .remaining-plans,
   &--recalculating .solutions {
     opacity: 0.5;
@@ -112,9 +136,7 @@
     color: rgba(0, 0, 0, 0.6);
   }
 
-  // Material 3 drives the button background via CSS custom properties, so the
-  // colour overrides need !important to win. Disabled buttons keep the default
-  // Material greyed-out look.
+  // Material 3 sets these colors through custom properties.
   &__submit:not(:disabled) {
     background-color: #2e7d32 !important;
     color: #fff !important;

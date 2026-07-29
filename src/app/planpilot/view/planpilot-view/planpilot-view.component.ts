@@ -29,7 +29,6 @@ import {
   PlanPilotGraphComponent,
   PlanPilotGraphConnection,
   PlanPilotGraphTap,
-  PlanPilotGraphVisualState,
 } from "../../components/planpilot-graph/planpilot-graph.component";
 import {
   PlanPilotSelectedActionView,
@@ -38,32 +37,74 @@ import {
 import { PlanPilotSidebarPlanComponent } from "../../components/planpilot-sidebar-plan/planpilot-sidebar-plan.component";
 import { PlanPilotSidebarPlansComponent } from "../../components/planpilot-sidebar-plans/planpilot-sidebar-plans.component";
 import {
+  PlanPilotCapabilities,
   PlanPilotFacet,
   PlanPilotFacetListResponse,
+  PlanPilotQueryJob,
+  PlanPilotQueryResult,
   PlanPilotSelectionMutationResponse,
   PlanPilotSessionResponse,
   PlanPilotService,
 } from "../../service/planpilot.service";
+import {
+  hasPlanPilotErrorCode,
+  planPilotError,
+} from "../../service/planpilot-error";
+import { PlanPilotQueryJobsService } from "../../service/planpilot-query-jobs.service";
 import { buildPlanPilotViewGraphConnections } from "./planpilot-graph-connections";
+import {
+  buildGoalFacet,
+  decorateGraphFacet,
+  facetStateLabel as presentFacetStateLabel,
+  isDisplayedPlanFacet as facetIsInDisplayedPlan,
+  isForbiddenFacet as facetIsForbidden,
+  isRequiredFacet as facetIsRequired,
+  isUserConstraint as facetIsUserConstraint,
+  PlanPilotDecoratedGraphFacet,
+  PlanPilotFacetPresentationContext,
+  selectionLabel as presentSelectionLabel,
+} from "./planpilot-facet-presentation";
+import { buildFacetSnapshot } from "./planpilot-facet-store";
+import { buildPlanPilotGraphView } from "./planpilot-graph-view";
+import { planPilotFacetAvailabilityReason } from "./planpilot-facet-availability";
 import {
   buildPlanPilotGraphDiagnostic,
   javascriptAssetNames,
   PlanPilotGraphDiagnostic,
 } from "./planpilot-graph-diagnostic";
 import {
+  buildActionImpactView,
+  buildPlanComparisonGraphStates,
   buildTimelineRows,
   comparePlanSolutions,
+  fixedDisplayedPlanImpact,
+  parseSelectionImpact,
   PlanPilotComparison,
   PlanPilotFacetImpact,
   PlanPilotPlanSummary,
   PlanPilotTimelineRow,
-  summarizePlan,
 } from "./planpilot-analysis";
+import {
+  buildPlanPage,
+  cachedPlanNumbers,
+  knownPlanLowerBound,
+  mergePlanLoadResults,
+  nextPlanBatch,
+  planPageStartFor,
+  planPageSummaries,
+  PlanPilotPlanLoadResult as PlanLoadResult,
+  PlanPilotSolutionCache,
+} from "./planpilot-plan-store";
 import {
   mapBackendFacet,
   mapRepresentativeSolution,
   withFacetSelectionState,
 } from "./planpilot-solution";
+import {
+  buildConstraintTransaction,
+  discardSelectionDraft,
+  stageFacetSelection,
+} from "./planpilot-selection-draft";
 import {
   buildActionFilterViews,
   buildActionRowView,
@@ -77,30 +118,11 @@ import {
   FacetSelection,
   isStructuralPlanPilotFacet,
   PendingFacetSelection,
-  PlanPilotConstraintChange,
   PlanPilotConstraintTransaction,
   PlanPilotUiFacet,
 } from "./planpilot-view.models";
 
-interface LoadedPlan {
-  number: number;
-  label: string;
-  facets: PlanPilotUiFacet[];
-}
-
-interface PlanLoadResult {
-  number: number;
-  plan?: LoadedPlan;
-  error?: unknown;
-  stale?: boolean;
-  unavailable?: boolean;
-}
-
 type PlanPilotSidebarSection = "timeline" | "browse" | "plans";
-type PlanPilotDecoratedGraphFacet = PlanPilotUiFacet & {
-  visualState: PlanPilotGraphVisualState;
-};
-
 @Component({
   selector: "app-planpilot-view",
   imports: [
@@ -125,12 +147,16 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   private readonly initialGraphFacetLimit = 50;
   private readonly graphLimitStep = 50;
   private readonly planPageSize = 5;
+  private readonly planBatchSize = 20;
   private readonly maxFacetChangesPerRequest = 50;
   private readonly maxHistoryEntries = 50;
-  private readonly maxSessionHorizon = 100;
+  maxSessionHorizon = 100;
+  analysisTimeoutSeconds = 30;
+  maxAnalysisTimeoutSeconds = 300;
   private readonly fullscreenBodyClass = "planpilot-fullscreen-open";
   private route = inject(ActivatedRoute);
   private planPilotService = inject(PlanPilotService);
+  private queryJobs = inject(PlanPilotQueryJobsService);
   private document = inject(DOCUMENT);
   private bodyOverflowBeforeFullscreen = "";
   private fullscreenScrollLocked = false;
@@ -176,12 +202,13 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   representativeSolution: PlanPilotUiFacet[] = [];
   representativeSolutionLabel = "";
   currentSolutionNumber = 0;
-  solutionCache: Record<number, { label: string; facets: PlanPilotUiFacet[] }> =
-    {};
+  solutionCache: PlanPilotSolutionCache = {};
   facetListLimit = this.facetPageSize;
   graphFacetLimit = this.initialGraphFacetLimit;
   activeTimestep: number | "any" | null = null;
   focusedTimestep: number | "any" | null = null;
+  hoveredTimestep: number | "any" | null = null;
+  hoveredFacetId?: string;
   activeSidebarSection: PlanPilotSidebarSection = "browse";
   facetImpacts: Record<string, PlanPilotFacetImpact> = {};
   impactLoading = false;
@@ -202,7 +229,18 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   comparison?: PlanPilotComparison;
   comparisonLoading = false;
   comparisonError = "";
+  comparisonGraphActive = false;
+  comparisonGraphStates: Record<
+    string,
+    "same" | "moved" | "only-a" | "only-b"
+  > = {};
+  comparisonGraphPlans?: {
+    a: PlanPilotUiFacet[];
+    b: PlanPilotUiFacet[];
+  };
   selectionRevision = 0;
+  capabilities?: PlanPilotCapabilities;
+  activeQueryJob?: PlanPilotQueryJob;
 
   readonly filters: { value: FacetFilter; label: string }[] = [
     { value: "all", label: "All" },
@@ -285,71 +323,24 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   get graphFacets(): PlanPilotDecoratedGraphFacet[] {
-    const baseFacets = this.facets.filter(
-      (facet) =>
-        facet.nodeType === "root" ||
-        facet.available ||
-        (facet.selection !== "neutral" && facet.facetType !== "implied") ||
-        facet.id === this.inspectedFacetId,
-    );
-    const solutionById = new Map(
-      this.representativeSolution.map((facet) => [facet.id, facet]),
-    );
-    const mergedBase = baseFacets.map((facet): PlanPilotUiFacet => {
-      const solutionFacet = solutionById.get(facet.id);
-      return solutionFacet && facet.nodeType !== "root"
-        ? { ...facet, parentId: solutionFacet.parentId, solutionContext: true }
-        : facet;
-    });
-    const baseIds = new Set(mergedBase.map((facet) => facet.id));
+    const presentation = this.facetPresentationContext();
     const goalFacet = this.representativeSolution.length
-      ? this.goalFacet(
+      ? buildGoalFacet(
           this.representativeSolution[this.representativeSolution.length - 1],
+          presentation.solutionCount,
         )
       : undefined;
-    const merged = [
-      ...mergedBase,
-      ...this.representativeSolution.filter((facet) => !baseIds.has(facet.id)),
-      ...(goalFacet ? [goalFacet] : []),
-    ];
-    if (merged.length <= this.graphFacetLimit) {
-      return merged.map((facet) => this.decorateGraphFacet(facet));
-    }
-    const mandatory = merged.filter(
-      (facet) =>
-        facet.nodeType === "root" ||
-        facet.nodeType === "goal" ||
-        (facet.selection !== "neutral" && facet.facetType !== "implied") ||
-        facet.solutionContext ||
-        facet.id === this.inspectedFacetId,
-    );
-    const mandatoryIds = new Set(mandatory.map((facet) => facet.id));
-    const neutralByTimestep = new Map<number, PlanPilotUiFacet[]>();
-    merged
-      .filter((facet) => !mandatoryIds.has(facet.id))
-      .sort((left, right) => this.compareFacets(left, right))
-      .forEach((facet) => {
-        neutralByTimestep.set(facet.timestep, [
-          ...(neutralByTimestep.get(facet.timestep) ?? []),
-          facet,
-        ]);
-      });
-    const optionalCapacity = Math.max(
-      0,
-      this.graphFacetLimit - mandatory.length,
-    );
-    const optional = this.takeFacetsRoundRobin(
-      neutralByTimestep,
-      optionalCapacity,
-    );
-    const visibleIds = new Set([
-      ...mandatoryIds,
-      ...optional.slice(0, optionalCapacity).map((facet) => facet.id),
-    ]);
-
-    return merged
-      .filter((facet) => visibleIds.has(facet.id))
-      .map((facet) => this.decorateGraphFacet(facet));
+    return buildPlanPilotGraphView({
+      facets: this.facets,
+      displayedPlan: this.representativeSolution,
+      goal: goalFacet,
+      inspectedFacetId: this.inspectedFacetId,
+      limit: this.graphFacetLimit,
+      comparisonActive: this.comparisonGraphActive,
+      comparisonStates: this.comparisonGraphStates,
+      comparisonPlans: this.comparisonGraphPlans,
+      compare: (left, right) => this.compareFacets(left, right),
+    }).map((facet) => decorateGraphFacet(facet, presentation));
   }
 
   get totalGraphDomainFacetCount(): number {
@@ -508,10 +499,39 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   get knownPlanLowerBound(): number {
-    return Math.max(
-      this.representativeSolution.length ? 1 : 0,
+    return knownPlanLowerBound(
+      this.solutionCache,
       this.currentSolutionNumber,
-      ...Object.keys(this.solutionCache).map(Number),
+      this.representativeSolution.length > 0,
+    );
+  }
+
+  get loadedPlanCount(): number {
+    return Object.keys(this.solutionCache).length;
+  }
+
+  get cachedPlanNumbers(): number[] {
+    return cachedPlanNumbers(this.solutionCache);
+  }
+
+  get nextPlanBatchStart(): number {
+    return this.planBatchRange.start;
+  }
+
+  get nextPlanBatchEnd(): number {
+    return this.planBatchRange.end;
+  }
+
+  get hasMorePlanBatches(): boolean {
+    return this.planBatchRange.hasMore;
+  }
+
+  private get planBatchRange() {
+    return nextPlanBatch(
+      this.solutionCache,
+      this.planBatchSize,
+      this.solutionCountKnown,
+      this.solutionCount,
     );
   }
 
@@ -525,12 +545,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   get planPageSummaries(): PlanPilotPlanSummary[] {
-    return this.loadedPlanNumbers
-      .map((number) => {
-        const solution = this.solutionCache[number];
-        return solution ? summarizePlan(number, solution.facets) : undefined;
-      })
-      .filter((summary): summary is PlanPilotPlanSummary => Boolean(summary));
+    return planPageSummaries(this.solutionCache, this.loadedPlanNumbers);
   }
 
   get comparisonHasChanges(): boolean {
@@ -543,9 +558,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    this.project$
-      .pipe(take(1))
-      .subscribe((project) => this.startSession(project));
+    this.project$.pipe(take(1)).subscribe((project) => {
+      this.loadCapabilities(project);
+      this.startSession(project);
+    });
   }
 
   ngOnDestroy(): void {
@@ -647,7 +663,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   exitFullscreenWithEscape(): void {
     if (this.canvasExpanded) {
       this.toggleCanvasExpanded();
+      return;
     }
+    this.clearInspectedFacet();
+    this.hoverFacet();
   }
 
   setFilter(filter: FacetFilter): void {
@@ -665,9 +684,18 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     }
 
     this.inspectedFacetId = facetId;
-    setTimeout(() => {
-      this.graph?.focusFacet(facetId);
-    });
+  }
+
+  hoverFacet(facetId?: string): void {
+    this.hoveredFacetId = facetId;
+  }
+
+  hoverTimestep(timestep: number | "any" | null): void {
+    this.hoveredTimestep = timestep;
+  }
+
+  get highlightedGraphTimestep(): number | "any" | null {
+    return this.hoveredTimestep ?? this.focusedTimestep;
   }
 
   clearInspectedFacet(): void {
@@ -758,6 +786,66 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     }
   }
 
+  updateAnalysisTimeout(event: Event): void {
+    const value = Number((event.target as HTMLInputElement).value);
+    if (Number.isInteger(value)) {
+      this.analysisTimeoutSeconds = Math.min(
+        this.maxAnalysisTimeoutSeconds,
+        Math.max(5, value),
+      );
+    }
+  }
+
+  get supportsAsyncJobs(): boolean {
+    return this.capabilities?.supportsAsyncJobs === true;
+  }
+
+  get supportsAsyncPlanPreparation(): boolean {
+    return (
+      this.supportsAsyncJobs &&
+      this.capabilities?.asyncJobTypes?.includes("solution") === true
+    );
+  }
+
+  get canCancelActiveQueryJob(): boolean {
+    return (
+      this.activeQueryJob?.status === "queued" ||
+      this.activeQueryJob?.status === "running"
+    );
+  }
+
+  cancelActiveQueryJob(): void {
+    const runId = this.runId;
+    const job = this.activeQueryJob;
+    if (
+      !runId ||
+      !job ||
+      ["succeeded", "failed", "cancelled"].includes(job.status)
+    ) {
+      return;
+    }
+    this.activeOperationLabel = "Cancelling PlanPilot operation";
+    this.queryJobs
+      .cancel$(runId, job.jobId)
+      .pipe(take(1))
+      .subscribe({
+        next: (cancelled) => {
+          if (this.runId !== runId) {
+            return;
+          }
+          this.activeQueryJob = cancelled;
+          this.finishCancelledQueryJob();
+        },
+        error: (error) => {
+          if (this.runId !== runId) {
+            return;
+          }
+          this.backendError = this.errorMessage(error);
+          this.finishCancelledQueryJob();
+        },
+      });
+  }
+
   updateSessionEncoding(event: Event): void {
     const value = (event.target as HTMLSelectElement).value;
     if (value === "bounded" || value === "exact") {
@@ -828,18 +916,21 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       canClear: this.canClearFacet(facet),
       canPreviewImpact: this.canPreviewFacetImpact(facet),
       clearHint: this.clearFacetHint(facet),
+      unavailableReason: this.facetAvailabilityReason(facet),
       requireImpact: impact
-        ? this.actionImpactView(
+        ? buildActionImpactView(
             impact.require,
             impact.forbid,
             impact.comparableToCurrent,
+            this.solutionCountKnown ? this.solutionCount : null,
           )
         : undefined,
       forbidImpact: impact
-        ? this.actionImpactView(
+        ? buildActionImpactView(
             impact.forbid,
             impact.require,
             impact.comparableToCurrent,
+            this.solutionCountKnown ? this.solutionCount : null,
           )
         : undefined,
     };
@@ -909,7 +1000,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     if (this.isFixedDisplayedPlanFacet(facet)) {
       const count = this.solutionCountKnown ? this.solutionCount : null;
       this.facetImpacts = {
-        [facet.id]: this.fixedDisplayedPlanImpact(count),
+        [facet.id]: fixedDisplayedPlanImpact(count),
       };
       this.impactError = "";
       this.impactNotice =
@@ -928,68 +1019,104 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     this.impactError = "";
     this.impactNotice = "";
     this.activeOperationLabel = "Calculating action impact";
-    this.planPilotService.selectionImpact$(runId, facet.id).subscribe({
-      next: (response) => {
-        if (this.runId !== runId || this.analysisGeneration !== generation) {
-          return;
-        }
-        if (response.selectionRevision !== revision) {
-          this.refreshAfterStaleQuery(runId);
-          return;
-        }
-        const result = response.result;
-        if (
-          result.type !== "selectionImpact" ||
-          result.facetId !== facet.id ||
-          !result.require ||
-          !result.forbid
-        ) {
-          this.impactError = "PlanPilot returned an invalid impact result.";
-          this.impactLoading = false;
-          this.activeOperationLabel = "";
-          return;
-        }
-        if (response.solutionCount !== null) {
-          this.applySolutionCount(response.solutionCount);
-        }
-        this.facetImpacts = {
-          [facet.id]: {
-            exact: result.exact === true,
-            comparableToCurrent: result.comparableToCurrent === true,
-            require: {
-              available: result.require.available,
-              planReduction: result.require.planReduction,
-              plansRemaining: result.require.plansRemaining,
-              facetReduction: null,
-              facetsRemaining: null,
-            },
-            forbid: {
-              available: result.forbid.available,
-              planReduction: result.forbid.planReduction,
-              plansRemaining: result.forbid.plansRemaining,
-              facetReduction: null,
-              facetsRemaining: null,
-            },
+    if (this.supportsAsyncJobs) {
+      this.queryJobs
+        .run$(runId, {
+          type: "selectionImpact",
+          facetId: facet.id,
+          expectedSelectionRevision: revision,
+          timeoutSeconds: this.analysisTimeoutSeconds,
+        })
+        .subscribe({
+          next: (job) => {
+            if (
+              this.runId !== runId ||
+              this.analysisGeneration !== generation
+            ) {
+              return;
+            }
+            this.activeQueryJob = job;
+            if (job.status === "queued" || job.status === "running") {
+              return;
+            }
+            if (job.selectionRevision !== revision) {
+              this.activeQueryJob = undefined;
+              this.refreshAfterStaleQuery(runId);
+              return;
+            }
+            if (job.status === "cancelled") {
+              this.finishCancelledQueryJob();
+              return;
+            }
+            if (job.status === "failed") {
+              this.impactError =
+                job.error?.message ?? "Action impact is unavailable.";
+              this.impactLoading = false;
+              this.activeOperationLabel = "";
+              this.activeQueryJob = undefined;
+              return;
+            }
+            this.applyImpactQueryResult(facet, job.result);
+            this.activeQueryJob = undefined;
           },
-        };
-        this.impactNotice = result.exact
-          ? ""
-          : "Exact counts took too long. Availability is shown instead.";
-        this.impactLoading = false;
-        this.activeOperationLabel = "";
-        this.lastSelectionMessage =
-          "Action impact calculated for the current plan space.";
-      },
-      error: (error) => {
-        if (this.runId !== runId || this.analysisGeneration !== generation) {
-          return;
-        }
-        this.impactError = this.errorMessage(error);
-        this.impactNotice = "";
-        this.impactLoading = false;
-        this.activeOperationLabel = "";
-      },
-    });
+          error: (error) => this.handleImpactError(runId, generation, error),
+        });
+      return;
+    }
+    this.planPilotService
+      .selectionImpact$(runId, facet.id, this.analysisTimeoutSeconds)
+      .subscribe({
+        next: (response) => {
+          if (this.runId !== runId || this.analysisGeneration !== generation) {
+            return;
+          }
+          if (response.selectionRevision !== revision) {
+            this.refreshAfterStaleQuery(runId);
+            return;
+          }
+          this.applyImpactQueryResult(facet, response.result);
+        },
+        error: (error) => this.handleImpactError(runId, generation, error),
+      });
+  }
+
+  private applyImpactQueryResult(
+    facet: PlanPilotUiFacet,
+    result: PlanPilotQueryResult | undefined,
+  ): void {
+    const parsed = parseSelectionImpact(result, facet.id);
+    if (!parsed) {
+      this.impactError = "PlanPilot returned an invalid impact result.";
+      this.impactLoading = false;
+      this.activeOperationLabel = "";
+      return;
+    }
+    if (parsed.totalPlans !== null) {
+      this.applySolutionCount(parsed.totalPlans);
+    }
+    this.facetImpacts = { [facet.id]: parsed.impact };
+    this.impactNotice = parsed.impact.exact
+      ? ""
+      : "Exact counts took too long. Availability is shown instead.";
+    this.impactLoading = false;
+    this.activeOperationLabel = "";
+    this.lastSelectionMessage =
+      "Action impact calculated for the current plan space.";
+  }
+
+  private handleImpactError(
+    runId: string,
+    generation: number,
+    error: unknown,
+  ): void {
+    if (this.runId !== runId || this.analysisGeneration !== generation) {
+      return;
+    }
+    this.impactError = this.errorMessage(error);
+    this.impactNotice = "";
+    this.impactLoading = false;
+    this.activeOperationLabel = "";
+    this.activeQueryJob = undefined;
   }
 
   loadRequiredActions(): void {
@@ -1036,24 +1163,14 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     if (!this.runId || this.isBusy) {
       return;
     }
-    const requestedStart =
-      Math.floor((Math.max(1, start) - 1) / this.planPageSize) *
-        this.planPageSize +
-      1;
-    const lastPageStart = this.solutionCountKnown
-      ? this.planPageStartFor(this.solutionCount)
-      : requestedStart;
-    const normalizedStart = Math.min(requestedStart, lastPageStart);
-    const pageLength = this.solutionCountKnown
-      ? Math.min(
-          this.planPageSize,
-          Math.max(0, this.solutionCount - normalizedStart + 1),
-        )
-      : this.planPageSize;
-    const numbers = Array.from(
-      { length: pageLength },
-      (_, index) => normalizedStart + index,
+    const page = buildPlanPage(
+      start,
+      this.planPageSize,
+      this.solutionCountKnown,
+      this.solutionCount,
     );
+    const normalizedStart = page.start;
+    const numbers = page.numbers;
     if (!numbers.length) {
       return;
     }
@@ -1072,24 +1189,17 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
           this.refreshAfterStaleQuery(runId);
           return;
         }
-        const errors: string[] = [];
-        results.forEach((result) => {
-          if (result.plan) {
-            this.solutionCache[result.number] = {
-              label: result.plan.label,
-              facets: result.plan.facets.map((facet) => ({ ...facet })),
-            };
-          } else if (result.error && !result.unavailable) {
-            errors.push(
-              `Plan ${result.number}: ${this.errorMessage(result.error)}`,
-            );
-          }
-        });
+        const merged = mergePlanLoadResults(
+          this.solutionCache,
+          results,
+          (error) => this.errorMessage(error),
+        );
+        this.solutionCache = merged.cache;
         this.planPageStart = normalizedStart;
         this.loadedPlanNumbers = numbers.filter((number) =>
           Boolean(this.solutionCache[number]),
         );
-        this.planPageError = errors.join(" ");
+        this.planPageError = merged.errors.join(" ");
         this.planPageLoading = false;
         this.activeOperationLabel = "";
         if (
@@ -1099,7 +1209,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
               solutionToShow > this.solutionCount))
         ) {
           this.lastSelectionMessage = `This plan space contains ${this.solutionCount} plan${this.solutionCount === 1 ? "" : "s"}. Showing the last page.`;
-          const finalPageStart = this.planPageStartFor(this.solutionCount);
+          const finalPageStart = planPageStartFor(
+            this.solutionCount,
+            this.planPageSize,
+          );
           if (normalizedStart !== finalPageStart) {
             this.loadPlanPage(finalPageStart);
           }
@@ -1136,18 +1249,22 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     ) {
       return;
     }
-    this.loadPlanPage(this.planPageStartFor(solutionNumber), solutionNumber);
+    this.loadPlanPage(
+      planPageStartFor(solutionNumber, this.planPageSize),
+      solutionNumber,
+    );
   }
 
-  preparePlansThrough(solutionNumber: number): void {
+  loadNextPlanBatch(): void {
+    const batchStart = this.nextPlanBatchStart;
+    const batchEnd = this.nextPlanBatchEnd;
     if (
       !this.runId ||
       this.isBusy ||
       this.sessionConfigurationChanged ||
       this.pendingSelectionCount > 0 ||
-      !Number.isSafeInteger(solutionNumber) ||
-      solutionNumber < 1 ||
-      (this.solutionCountKnown && solutionNumber > this.solutionCount)
+      !this.hasMorePlanBatches ||
+      batchEnd < batchStart
     ) {
       return;
     }
@@ -1156,51 +1273,146 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     const generation = this.analysisGeneration;
     this.planPreparationLoading = true;
     this.planPreparationError = "";
-    this.activeOperationLabel = `Preparing plans 1–${solutionNumber}`;
-    this.loadPlanResult$(runId, solutionNumber)
-      .pipe(take(1))
-      .subscribe({
-        next: (result) => {
-          if (this.runId !== runId || this.analysisGeneration !== generation) {
-            return;
-          }
-          if (result.stale) {
-            this.refreshAfterStaleQuery(runId);
-            return;
-          }
-          if (result.error) {
-            this.planPreparationError = this.errorMessage(result.error);
-          } else if (result.plan) {
-            this.solutionCache[result.number] = {
-              label: result.plan.label,
-              facets: result.plan.facets.map((facet) => ({ ...facet })),
-            };
-            this.lastSelectionMessage = `Plans 1–${solutionNumber} are ready to browse.`;
-          } else if (this.solutionCountKnown) {
-            this.lastSelectionMessage = `This plan space contains ${this.solutionCount} plan${this.solutionCount === 1 ? "" : "s"}.`;
-          } else {
-            this.planPreparationError = `Plan ${solutionNumber} is not available.`;
-          }
-          this.planPreparationLoading = false;
-          this.activeOperationLabel = "";
-        },
-        error: (error) => {
-          if (this.runId !== runId || this.analysisGeneration !== generation) {
-            return;
-          }
-          this.planPreparationError = this.errorMessage(error);
-          this.planPreparationLoading = false;
-          this.activeOperationLabel = "";
-        },
-      });
+    this.activeOperationLabel = `Loading plans ${batchStart}–${batchEnd}`;
+    if (this.supportsAsyncPlanPreparation) {
+      const revision = this.selectionRevision;
+      this.queryJobs
+        .run$(runId, {
+          type: "solution",
+          solutionStart: batchStart,
+          solutionNumber: batchEnd,
+          expectedSelectionRevision: revision,
+          timeoutSeconds: this.analysisTimeoutSeconds,
+        })
+        .subscribe({
+          next: (job) => {
+            if (
+              this.runId !== runId ||
+              this.analysisGeneration !== generation
+            ) {
+              return;
+            }
+            this.activeQueryJob = job;
+            if (job.status === "queued" || job.status === "running") {
+              return;
+            }
+            if (job.selectionRevision !== revision) {
+              this.activeQueryJob = undefined;
+              this.refreshAfterStaleQuery(runId);
+              return;
+            }
+            if (job.status === "cancelled") {
+              this.finishCancelledQueryJob();
+              return;
+            }
+            if (job.status === "failed") {
+              this.planPreparationError =
+                job.error?.message ?? "Plans could not be loaded.";
+              this.planPreparationLoading = false;
+              this.activeOperationLabel = "";
+              this.activeQueryJob = undefined;
+              return;
+            }
+            const results: PlanLoadResult[] = (job.result?.solutions ?? []).map(
+              (solution, index) => ({
+                number: batchStart + index,
+                plan: {
+                  number: batchStart + index,
+                  label: solution.label,
+                  facets: this.toRepresentativeSolution(solution.facets),
+                },
+              }),
+            );
+            this.finishPlanBatch(
+              runId,
+              generation,
+              batchStart,
+              batchEnd,
+              results,
+            );
+            this.activeQueryJob = undefined;
+          },
+          error: (error) => {
+            if (
+              this.runId !== runId ||
+              this.analysisGeneration !== generation
+            ) {
+              return;
+            }
+            this.planPreparationError = this.errorMessage(error);
+            this.planPreparationLoading = false;
+            this.activeOperationLabel = "";
+            this.activeQueryJob = undefined;
+          },
+        });
+      return;
+    }
+    const numbers = Array.from(
+      { length: batchEnd - batchStart + 1 },
+      (_, index) => batchStart + index,
+    );
+    this.loadPlanResultsHighestFirst$(runId, numbers).subscribe({
+      next: (results) =>
+        this.finishPlanBatch(runId, generation, batchStart, batchEnd, results),
+      error: (error) => {
+        if (this.runId !== runId || this.analysisGeneration !== generation) {
+          return;
+        }
+        this.planPreparationError = this.errorMessage(error);
+        this.planPreparationLoading = false;
+        this.activeOperationLabel = "";
+      },
+    });
   }
 
-  private planPageStartFor(solutionNumber: number): number {
-    return (
-      Math.floor((Math.max(1, solutionNumber) - 1) / this.planPageSize) *
-        this.planPageSize +
-      1
+  private finishPlanBatch(
+    runId: string,
+    generation: number,
+    batchStart: number,
+    batchEnd: number,
+    results: PlanLoadResult[],
+  ): void {
+    if (this.runId !== runId || this.analysisGeneration !== generation) {
+      return;
+    }
+    if (results.some((result) => result.stale)) {
+      this.refreshAfterStaleQuery(runId);
+      return;
+    }
+    const merged = mergePlanLoadResults(this.solutionCache, results, (error) =>
+      this.errorMessage(error),
     );
+    this.solutionCache = merged.cache;
+    const errors = merged.errors;
+    const loadedNumbers = Array.from(
+      { length: batchEnd - batchStart + 1 },
+      (_, index) => batchStart + index,
+    ).filter((number) => Boolean(this.solutionCache[number]));
+    if (
+      !this.solutionCountKnown &&
+      loadedNumbers.length < batchEnd - batchStart + 1 &&
+      errors.length === 0
+    ) {
+      this.applySolutionCount(
+        loadedNumbers.length
+          ? loadedNumbers[loadedNumbers.length - 1]
+          : Math.max(0, batchStart - 1),
+      );
+    }
+    if (loadedNumbers.length) {
+      this.planPageStart = planPageStartFor(
+        loadedNumbers[0],
+        this.planPageSize,
+      );
+      this.loadedPlanNumbers = loadedNumbers.slice(0, this.planPageSize);
+      const lastLoaded = loadedNumbers[loadedNumbers.length - 1];
+      this.lastSelectionMessage = `Loaded plans ${loadedNumbers[0]}–${lastLoaded}.`;
+    } else if (!errors.length) {
+      this.lastSelectionMessage = "No more plans are available.";
+    }
+    this.planPreparationError = errors.join(" ");
+    this.planPreparationLoading = false;
+    this.activeOperationLabel = "";
   }
 
   updateComparisonPlan(event: Event, side: "a" | "b"): void {
@@ -1218,6 +1430,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     }
     this.comparison = undefined;
     this.comparisonError = "";
+    this.clearGraphComparison();
   }
 
   compareSelectedPlans(): void {
@@ -1251,14 +1464,11 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
           this.refreshAfterStaleQuery(runId);
           return;
         }
-        for (const result of [resultA, resultB]) {
-          if (result.plan) {
-            this.solutionCache[result.number] = {
-              label: result.plan.label,
-              facets: result.plan.facets.map((facet) => ({ ...facet })),
-            };
-          }
-        }
+        this.solutionCache = mergePlanLoadResults(
+          this.solutionCache,
+          [resultA, resultB],
+          (error) => this.errorMessage(error),
+        ).cache;
         const cachedA = this.solutionCache[planA];
         const cachedB = this.solutionCache[planB];
         if (!cachedA || !cachedB) {
@@ -1273,6 +1483,15 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
             cachedA.facets,
             cachedB.facets,
           );
+          this.comparisonGraphPlans = {
+            a: cachedA.facets.map((facet) => ({ ...facet })),
+            b: cachedB.facets.map((facet) => ({ ...facet })),
+          };
+          this.comparisonGraphStates = buildPlanComparisonGraphStates(
+            cachedA.facets,
+            cachedB.facets,
+          );
+          this.comparisonGraphActive = true;
         }
         this.comparisonLoading = false;
         this.activeOperationLabel = "";
@@ -1288,40 +1507,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     });
   }
 
-  private actionImpactView(
-    impact: PlanPilotFacetImpact["require"] | PlanPilotFacetImpact["forbid"],
-    counterpart:
-      PlanPilotFacetImpact["require"] | PlanPilotFacetImpact["forbid"],
-    comparableToCurrent: boolean,
-  ) {
-    const derivedTotal =
-      comparableToCurrent &&
-      impact.plansRemaining !== null &&
-      counterpart.plansRemaining !== null
-        ? impact.plansRemaining + counterpart.plansRemaining
-        : null;
-    const totalPlans = comparableToCurrent
-      ? this.solutionCountKnown
-        ? this.solutionCount
-        : derivedTotal
-      : null;
-    return {
-      available: impact.available,
-      totalPlans,
-      plansRemaining: impact.plansRemaining,
-      plansRemoved:
-        totalPlans !== null && impact.plansRemaining !== null
-          ? Math.max(0, totalPlans - impact.plansRemaining)
-          : null,
-      reductionPercent:
-        totalPlans !== null && impact.plansRemaining !== null
-          ? Math.round(
-              ((totalPlans - impact.plansRemaining) / totalPlans) * 10_000,
-            ) / 100
-          : impact.planReduction === null || !comparableToCurrent
-            ? null
-            : Math.round(impact.planReduction * 10_000) / 100,
-    };
+  clearGraphComparison(): void {
+    this.comparisonGraphActive = false;
+    this.comparisonGraphStates = {};
+    this.comparisonGraphPlans = undefined;
   }
 
   applySessionConfiguration(): void {
@@ -1370,46 +1559,50 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     const revision = this.selectionRevision;
     this.queryPending = true;
     this.activeOperationLabel = `Loading plan ${solutionNumber}`;
-    this.planPilotService.query$(runId, "solution", solutionNumber).subscribe({
-      next: (response) => {
-        if (this.runId !== runId) {
-          return;
-        }
-        if (response.selectionRevision !== revision) {
-          this.refreshAfterStaleQuery(runId);
-          return;
-        }
-        if (response.solutionCount !== null) {
-          this.applySolutionCount(response.solutionCount);
-        }
-        const solution = response.result.solutions?.[0];
-        if (!solution?.facets.length) {
-          this.lastSelectionMessage = `There are only ${this.solutionCount || solutionNumber - 1} plans in this space.`;
-        } else {
-          this.backendError = undefined;
-          this.currentSolutionNumber = solutionNumber;
-          this.representativeSolutionLabel = solution.label;
-          this.representativeSolution = this.toRepresentativeSolution(
-            solution.facets,
-          );
-          this.solutionCache[solutionNumber] = {
-            label: this.representativeSolutionLabel,
-            facets: this.representativeSolution.map((facet) => ({ ...facet })),
-          };
-          setTimeout(() => this.graph?.fitGraph());
-        }
-        this.queryPending = false;
-        this.activeOperationLabel = "";
-      },
-      error: (error) => {
-        if (this.runId !== runId) {
-          return;
-        }
-        this.backendError = this.errorMessage(error);
-        this.queryPending = false;
-        this.activeOperationLabel = "";
-      },
-    });
+    this.planPilotService
+      .query$(runId, "solution", solutionNumber, this.analysisTimeoutSeconds)
+      .subscribe({
+        next: (response) => {
+          if (this.runId !== runId) {
+            return;
+          }
+          if (response.selectionRevision !== revision) {
+            this.refreshAfterStaleQuery(runId);
+            return;
+          }
+          if (response.solutionCount !== null) {
+            this.applySolutionCount(response.solutionCount);
+          }
+          const solution = response.result.solutions?.[0];
+          if (!solution?.facets.length) {
+            this.lastSelectionMessage = `There are only ${this.solutionCount || solutionNumber - 1} plans in this space.`;
+          } else {
+            this.backendError = undefined;
+            this.currentSolutionNumber = solutionNumber;
+            this.representativeSolutionLabel = solution.label;
+            this.representativeSolution = this.toRepresentativeSolution(
+              solution.facets,
+            );
+            this.solutionCache[solutionNumber] = {
+              label: this.representativeSolutionLabel,
+              facets: this.representativeSolution.map((facet) => ({
+                ...facet,
+              })),
+            };
+            setTimeout(() => this.graph?.fitGraph());
+          }
+          this.queryPending = false;
+          this.activeOperationLabel = "";
+        },
+        error: (error) => {
+          if (this.runId !== runId) {
+            return;
+          }
+          this.backendError = this.errorMessage(error);
+          this.queryPending = false;
+          this.activeOperationLabel = "";
+        },
+      });
   }
 
   selectFacetFromGraph(event: PlanPilotGraphTap): void {
@@ -1451,64 +1644,16 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const previousSelection = facet.selection;
     const targetSelection = selection;
-    const existingPending = this.pendingSelections[facet.id];
-    const committedSelection =
-      existingPending?.previousSelection ?? previousSelection;
-    const nextPendingSelections = { ...this.pendingSelections };
-    let nextFacets = this.facets;
-
-    if (targetSelection === "positive") {
-      nextFacets = nextFacets.map((candidate) => {
-        if (
-          candidate.id === facet.id ||
-          facet.abstractTimeStep ||
-          candidate.abstractTimeStep ||
-          candidate.timestep !== facet.timestep ||
-          candidate.selection !== "positive" ||
-          (!this.isUserConstraint(candidate) &&
-            nextPendingSelections[candidate.id]?.selection !== "positive")
-        ) {
-          return candidate;
-        }
-
-        const candidatePending = nextPendingSelections[candidate.id];
-        const candidateCommitted =
-          candidatePending?.previousSelection ?? candidate.selection;
-        if (candidateCommitted === "neutral") {
-          delete nextPendingSelections[candidate.id];
-        } else {
-          nextPendingSelections[candidate.id] = {
-            facetId: candidate.id,
-            label: candidate.label,
-            timestep: candidate.timestep,
-            selection: "neutral",
-            previousSelection: candidateCommitted,
-          };
-        }
-        return this.withSelectionState(candidate, "neutral");
-      });
-    }
-
-    if (targetSelection === committedSelection) {
-      delete nextPendingSelections[facet.id];
-    } else {
-      nextPendingSelections[facet.id] = {
-        facetId,
-        label: facet.label,
-        timestep: facet.timestep,
-        selection: targetSelection,
-        previousSelection: committedSelection,
-      };
-    }
-
-    this.pendingSelections = nextPendingSelections;
-    this.facets = nextFacets.map((item) =>
-      item.id === facetId
-        ? this.withSelectionState(item, targetSelection)
-        : item,
+    const draft = stageFacetSelection(
+      this.facets,
+      this.pendingSelections,
+      facetId,
+      targetSelection,
+      new Set(this.activeConstraints.map((constraint) => constraint.id)),
     );
+    this.pendingSelections = draft.pendingSelections;
+    this.facets = draft.facets;
     this.inspectedFacetId = facetId;
     const stagedAction =
       targetSelection === "neutral"
@@ -1527,24 +1672,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       this.backendError = `Apply at most ${this.maxFacetChangesPerRequest} changes at once.`;
       return;
     }
-    const transaction: PlanPilotConstraintTransaction = {
-      label: this.transactionLabel(
-        stagedSelections.map((selection) => ({
-          facetId: selection.facetId,
-          label: selection.label,
-          timestep: selection.timestep,
-          from: selection.previousSelection,
-          to: selection.selection,
-        })),
-      ),
-      changes: stagedSelections.map((selection) => ({
-        facetId: selection.facetId,
-        label: selection.label,
-        timestep: selection.timestep,
-        from: selection.previousSelection,
-        to: selection.selection,
-      })),
-    };
+    const transaction = buildConstraintTransaction(stagedSelections);
 
     this.selectionPending = true;
     this.activeOperationLabel = `Applying ${stagedSelections.length} staged change${stagedSelections.length === 1 ? "" : "s"}`;
@@ -1587,15 +1715,11 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
             return;
           }
           if (this.isSelectionConflict(error)) {
+            this.facets = discardSelectionDraft(
+              this.facets,
+              this.pendingSelections,
+            );
             this.pendingSelections = {};
-            this.facets = this.facets.map((facet) => {
-              const staged = stagedSelections.find(
-                (selection) => selection.facetId === facet.id,
-              );
-              return staged
-                ? this.withSelectionState(facet, staged.previousSelection)
-                : facet;
-            });
             this.activePinnedFacets = {};
             this.knownFacets = {};
             this.undoStack = [];
@@ -1623,15 +1747,8 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.facets = discardSelectionDraft(this.facets, this.pendingSelections);
     this.pendingSelections = {};
-    this.facets = this.facets.map((facet) => {
-      const staged = stagedSelections.find(
-        (selection) => selection.facetId === facet.id,
-      );
-      return staged
-        ? this.withSelectionState(facet, staged.previousSelection)
-        : facet;
-    });
     this.lastSelectionMessage = "Changes discarded.";
   }
 
@@ -1869,14 +1986,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   selectionLabel(selection: FacetSelection): string {
-    switch (selection) {
-      case "positive":
-        return "Required by you";
-      case "negative":
-        return "Forbidden by you";
-      default:
-        return "Available";
-    }
+    return presentSelectionLabel(selection);
   }
 
   timestepLabel(facet: PlanPilotUiFacet): string {
@@ -1884,57 +1994,19 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   facetStateLabel(facet: PlanPilotUiFacet): string {
-    const pending = this.pendingSelections[facet.id]?.selection;
-    const inDisplayedPlan = this.isDisplayedPlanFacet(facet);
-    if (pending) {
-      const pendingLabel =
-        pending === "positive"
-          ? "Require pending"
-          : pending === "negative"
-            ? "Forbid pending"
-            : "Remove pending";
-      return inDisplayedPlan
-        ? `Displayed plan · ${pendingLabel}`
-        : pendingLabel;
-    }
-    if (inDisplayedPlan) {
-      return this.isUserConstraint(facet) && facet.selection === "positive"
-        ? "Displayed plan · Required by you"
-        : "Displayed plan · No constraint";
-    }
-    if (facet.facetType === "implied") {
-      return "Occurs in every plan";
-    }
-    if (this.isUserConstraint(facet)) {
-      return this.selectionLabel(facet.selection);
-    }
-    if (!facet.available) {
-      return "Outside current space";
-    }
-    return this.selectionLabel(facet.selection);
+    return presentFacetStateLabel(facet, this.facetPresentationContext());
   }
 
   isDisplayedPlanFacet(facet: PlanPilotUiFacet): boolean {
-    return (
-      Boolean(facet.solutionContext) ||
-      this.representativeSolution.some((action) => action.id === facet.id)
-    );
+    return facetIsInDisplayedPlan(facet, this.facetPresentationContext());
   }
 
   isRequiredFacet(facet: PlanPilotUiFacet): boolean {
-    return (
-      facet.selection === "positive" &&
-      (this.pendingSelections[facet.id]?.selection === "positive" ||
-        this.isUserConstraint(facet))
-    );
+    return facetIsRequired(facet, this.facetPresentationContext());
   }
 
   isForbiddenFacet(facet: PlanPilotUiFacet): boolean {
-    return (
-      facet.selection === "negative" &&
-      (this.pendingSelections[facet.id]?.selection === "negative" ||
-        this.isUserConstraint(facet))
-    );
+    return facetIsForbidden(facet, this.facetPresentationContext());
   }
 
   canRequireFacet(facet: PlanPilotUiFacet): boolean {
@@ -1976,14 +2048,25 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   private actionRowView(facet: PlanPilotUiFacet) {
-    return buildActionRowView(facet, {
-      timestepLabel: (item) => this.timestepLabel(item),
-      stateLabel: (item) => this.facetStateLabel(item),
-      displayedPlan: (item) => this.isDisplayedPlanFacet(item),
-      required: (item) => this.isRequiredFacet(item),
-      forbidden: (item) => this.isForbiddenFacet(item),
-      selectedFacetId: this.inspectedFacetId,
-    });
+    return {
+      ...buildActionRowView(facet, {
+        timestepLabel: (item) => this.timestepLabel(item),
+        stateLabel: (item) => this.facetStateLabel(item),
+        displayedPlan: (item) => this.isDisplayedPlanFacet(item),
+        required: (item) => this.isRequiredFacet(item),
+        forbidden: (item) => this.isForbiddenFacet(item),
+        selectedFacetId: this.inspectedFacetId,
+      }),
+      unavailableReason: this.facetAvailabilityReason(facet),
+    };
+  }
+
+  private facetAvailabilityReason(facet: PlanPilotUiFacet): string | undefined {
+    return planPilotFacetAvailabilityReason(
+      facet,
+      this.activeConstraints,
+      this.knownFacets,
+    );
   }
 
   private compareFacets(
@@ -1998,34 +2081,6 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       (right.solutionReduction ?? -1) - (left.solutionReduction ?? -1) ||
       left.label.localeCompare(right.label)
     );
-  }
-
-  private takeFacetsRoundRobin(
-    facetsByTimestep: Map<number, PlanPilotUiFacet[]>,
-    limit: number,
-  ): PlanPilotUiFacet[] {
-    const groups = Array.from(facetsByTimestep.entries())
-      .sort(([left], [right]) => left - right)
-      .map(([, facets]) => facets);
-    const result: PlanPilotUiFacet[] = [];
-    let index = 0;
-
-    while (result.length < limit) {
-      let added = false;
-      for (const group of groups) {
-        const facet = group[index];
-        if (facet && result.length < limit) {
-          result.push(facet);
-          added = true;
-        }
-      }
-      if (!added) {
-        break;
-      }
-      index += 1;
-    }
-
-    return result;
   }
 
   private facetDisplayPriority(facet: PlanPilotUiFacet): number {
@@ -2054,32 +2109,34 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       });
     }
     const revision = this.selectionRevision;
-    return this.planPilotService.query$(runId, "solution", number).pipe(
-      map((response): PlanLoadResult => {
-        if (response.selectionRevision !== revision) {
-          return { number, stale: true };
-        }
-        if (response.solutionCount !== null) {
-          this.applySolutionCount(response.solutionCount);
-        }
-        const solution = response.result.solutions?.[0];
-        if (!solution?.facets.length) {
+    return this.planPilotService
+      .query$(runId, "solution", number, this.analysisTimeoutSeconds)
+      .pipe(
+        map((response): PlanLoadResult => {
+          if (response.selectionRevision !== revision) {
+            return { number, stale: true };
+          }
+          if (response.solutionCount !== null) {
+            this.applySolutionCount(response.solutionCount);
+          }
+          const solution = response.result.solutions?.[0];
+          if (!solution?.facets.length) {
+            return {
+              number,
+              unavailable: true,
+            };
+          }
           return {
             number,
-            unavailable: true,
+            plan: {
+              number,
+              label: solution.label,
+              facets: this.toRepresentativeSolution(solution.facets),
+            },
           };
-        }
-        return {
-          number,
-          plan: {
-            number,
-            label: solution.label,
-            facets: this.toRepresentativeSolution(solution.facets),
-          },
-        };
-      }),
-      catchError((error: unknown) => of({ number, error })),
-    );
+        }),
+        catchError((error: unknown) => of({ number, error })),
+      );
   }
 
   private loadPlanResultsHighestFirst$(
@@ -2192,20 +2249,6 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       });
   }
 
-  private transactionLabel(changes: PlanPilotConstraintChange[]): string {
-    if (changes.length !== 1) {
-      return `${changes.length} constraint changes`;
-    }
-    const change = changes[0];
-    const operation =
-      change.to === "positive"
-        ? "Require"
-        : change.to === "negative"
-          ? "Forbid"
-          : "Remove constraint from";
-    return `${operation} ${change.label}`;
-  }
-
   private pushUndoTransaction(
     transaction: PlanPilotConstraintTransaction,
   ): void {
@@ -2237,6 +2280,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     this.comparison = undefined;
     this.comparisonLoading = false;
     this.comparisonError = "";
+    this.clearGraphComparison();
   }
 
   private startSession(project: Project, replacementRunId?: string): void {
@@ -2356,7 +2400,61 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
 
   private isExpiredSessionError(error: unknown): boolean {
     const status = (error as { status?: unknown } | null)?.status;
-    return status === 404 || status === 410;
+    return (
+      status === 404 ||
+      status === 410 ||
+      hasPlanPilotErrorCode(
+        error,
+        "PLANPILOT_RUN_EXPIRED",
+        "PLANPILOT_RUN_NOT_FOUND",
+        "SESSION_EXPIRED",
+        "SESSION_NOT_FOUND",
+      )
+    );
+  }
+
+  private loadCapabilities(project: Project): void {
+    this.planPilotService
+      .getCapabilities$(project._id)
+      .pipe(take(1))
+      .subscribe({
+        next: (capabilities) => {
+          this.capabilities = capabilities;
+          this.maxSessionHorizon = capabilities.maxHorizon;
+          this.maxAnalysisTimeoutSeconds =
+            capabilities.maxQueryTimeoutSeconds ?? 300;
+          this.analysisTimeoutSeconds = Math.min(
+            this.maxAnalysisTimeoutSeconds,
+            capabilities.defaultQueryTimeoutSeconds ??
+              this.analysisTimeoutSeconds,
+          );
+          this.sessionHorizon = Math.min(
+            Math.max(1, this.sessionHorizon),
+            capabilities.maxHorizon,
+          );
+        },
+        error: () => undefined,
+      });
+  }
+
+  private finishCancelledQueryJob(): void {
+    const wasLoadingPlans = this.planPreparationLoading;
+    const hadActiveOperation =
+      this.solutionCountLoading ||
+      this.impactLoading ||
+      this.planPreparationLoading;
+    if (!hadActiveOperation) {
+      this.activeQueryJob = undefined;
+      return;
+    }
+    this.solutionCountLoading = false;
+    this.impactLoading = false;
+    this.planPreparationLoading = false;
+    this.activeOperationLabel = "";
+    this.lastSelectionMessage = wasLoadingPlans
+      ? "Plan loading cancelled. Plans that were already loaded remain available."
+      : "Operation cancelled.";
+    this.activeQueryJob = undefined;
   }
 
   loadSolutionCount(): void {
@@ -2375,36 +2473,86 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     this.solutionCountLoading = true;
     this.solutionCountError = "";
     this.activeOperationLabel = "Counting remaining plans";
-    this.planPilotService.query$(runId, "solutionCount").subscribe({
-      next: (response) => {
-        if (this.runId !== runId) {
-          return;
-        }
-        if (response.selectionRevision !== revision) {
-          this.refreshAfterStaleQuery(runId);
-          return;
-        }
-        const count = response.result.value;
-        if (!Number.isInteger(count) || (count ?? 0) < 1) {
-          this.solutionCountError =
-            "PlanPilot did not return a valid plan count.";
-        } else {
-          this.applySolutionCount(count!);
-        }
-        this.solutionCountLoading = false;
-        this.activeOperationLabel = "";
-      },
-      error: (error) => {
-        if (this.runId !== runId) {
-          return;
-        }
-        this.solutionCountError = this.isPlanSpaceTimeout(error)
-          ? this.solutionCountTimeoutMessage()
-          : `Plan count unavailable: ${this.errorMessage(error)}`;
-        this.solutionCountLoading = false;
-        this.activeOperationLabel = "";
-      },
-    });
+    if (this.supportsAsyncJobs) {
+      this.queryJobs
+        .run$(runId, {
+          type: "solutionCount",
+          expectedSelectionRevision: revision,
+          timeoutSeconds: this.analysisTimeoutSeconds,
+        })
+        .subscribe({
+          next: (job) => {
+            if (this.runId !== runId) {
+              return;
+            }
+            this.activeQueryJob = job;
+            if (job.status === "queued" || job.status === "running") {
+              return;
+            }
+            if (job.selectionRevision !== revision) {
+              this.activeQueryJob = undefined;
+              this.refreshAfterStaleQuery(runId);
+              return;
+            }
+            if (job.status === "cancelled") {
+              this.finishCancelledQueryJob();
+              return;
+            }
+            if (job.status === "failed") {
+              this.solutionCountError = this.isPlanSpaceTimeout(job.error)
+                ? this.solutionCountTimeoutMessage()
+                : (job.error?.message ?? "Plan count unavailable.");
+              this.solutionCountLoading = false;
+              this.activeOperationLabel = "";
+              this.activeQueryJob = undefined;
+              return;
+            }
+            this.applyCountResult(job.result?.value);
+            this.solutionCountLoading = false;
+            this.activeOperationLabel = "";
+            this.activeQueryJob = undefined;
+          },
+          error: (error) => this.handleSolutionCountError(runId, error),
+        });
+      return;
+    }
+    this.planPilotService
+      .query$(runId, "solutionCount", undefined, this.analysisTimeoutSeconds)
+      .subscribe({
+        next: (response) => {
+          if (this.runId !== runId) {
+            return;
+          }
+          if (response.selectionRevision !== revision) {
+            this.refreshAfterStaleQuery(runId);
+            return;
+          }
+          this.applyCountResult(response.result.value);
+          this.solutionCountLoading = false;
+          this.activeOperationLabel = "";
+        },
+        error: (error) => this.handleSolutionCountError(runId, error),
+      });
+  }
+
+  private applyCountResult(count: number | undefined): void {
+    if (!Number.isInteger(count) || (count ?? 0) < 1) {
+      this.solutionCountError = "PlanPilot did not return a valid plan count.";
+      return;
+    }
+    this.applySolutionCount(count!);
+  }
+
+  private handleSolutionCountError(runId: string, error: unknown): void {
+    if (this.runId !== runId) {
+      return;
+    }
+    this.solutionCountError = this.isPlanSpaceTimeout(error)
+      ? this.solutionCountTimeoutMessage()
+      : `Plan count unavailable: ${this.errorMessage(error)}`;
+    this.solutionCountLoading = false;
+    this.activeOperationLabel = "";
+    this.activeQueryJob = undefined;
   }
 
   private applySessionSummary(
@@ -2470,7 +2618,7 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
         return [
           id,
           displayedFacet && this.isFixedDisplayedPlanFacet(displayedFacet)
-            ? this.fixedDisplayedPlanImpact(count)
+            ? fixedDisplayedPlanImpact(count)
             : impact,
         ];
       }),
@@ -2494,12 +2642,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   private isPlanSpaceTimeout(error: unknown): boolean {
-    if (!error || typeof error !== "object" || !("error" in error)) {
-      return false;
-    }
-    return (
-      (error as { error?: { code?: unknown } }).error?.code ===
-      "PLAN_SPACE_TOO_LARGE"
+    return hasPlanPilotErrorCode(
+      error,
+      "PLAN_SPACE_TOO_LARGE",
+      "PLANPILOT_TIMEOUT",
     );
   }
 
@@ -2533,80 +2679,20 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     this.representativeSolution = [];
     this.representativeSolutionLabel = "";
     this.solutionCache = {};
-    const previousAvailableIds = new Set(
-      this.facets
-        .filter((facet) => !this.isStructuralFacet(facet) && facet.available)
-        .map((facet) => facet.id),
-    );
-    const mapped = facets
-      .filter((facet) => !this.isStateFacet(facet))
-      .map((facet, index) => this.toPlanPilotUiFacet(facet, index))
-      .sort(
-        (left, right) =>
-          left.timestep - right.timestep ||
-          left.label.localeCompare(right.label),
-      );
-
-    const pinned = Object.values(this.activePinnedFacets)
-      .filter((facet) => !mapped.some((candidate) => candidate.id === facet.id))
-      .map((facet) => ({
-        ...facet,
-        available: false,
-        parentId: undefined,
-      }));
-
-    this.knownFacets = {
-      ...this.knownFacets,
-      ...Object.fromEntries(mapped.map((facet) => [facet.id, facet])),
-      ...Object.fromEntries(pinned.map((facet) => [facet.id, facet])),
-    };
-
-    const navigableFacets = [...mapped, ...pinned].sort((left, right) =>
-      this.compareGraphOrder(left, right),
-    );
-
-    if (summarizeChange && previousAvailableIds.size > 0) {
-      const nextAvailableIds = new Set(mapped.map((facet) => facet.id));
-      const added = mapped.filter(
-        (facet) => !previousAvailableIds.has(facet.id),
-      ).length;
-      const removed = Array.from(previousAvailableIds).filter(
-        (id) => !nextAvailableIds.has(id),
-      ).length;
-      this.lastSpaceChangeSummary = `${added} actions entered the current space · ${removed} left it`;
-    }
-
-    const root: PlanPilotUiFacet = {
-      id: "__session__",
-      label: "Start",
-      detail: "Start of the displayed plan.",
-      timestep: -1,
-      action: "session",
-      actionArguments: [],
-      group: "Session",
-      selection: "neutral",
-      nodeType: "root",
+    const snapshot = buildFacetSnapshot({
+      backendFacets: facets,
+      previousFacets: this.facets,
+      activePinnedFacets: this.activePinnedFacets,
+      knownFacets: this.knownFacets,
       remainingSolutions: this.solutionCountKnown ? this.solutionCount : null,
-      remainingFacets: mapped.length,
-      solutionReduction: 0,
-      facetReduction: 0,
-      available: true,
-      selectable: false,
-      tokens: ["start", "plan-space", "session"],
-    };
-
-    const nextFacets = [root, ...navigableFacets];
-    this.facets = nextFacets;
-    if (!navigableFacets.length) {
-      this.inspectedFacetId = undefined;
-      this.lastSpaceChangeSummary = summarizeChange
-        ? "Current space is empty for this selection."
-        : this.lastSpaceChangeSummary;
-    } else if (
-      this.inspectedFacetId &&
-      !nextFacets.some((facet) => facet.id === this.inspectedFacetId)
-    ) {
-      this.inspectedFacetId = undefined;
+      inspectedFacetId: this.inspectedFacetId,
+      summarizeChange,
+    });
+    this.facets = snapshot.facets;
+    this.knownFacets = snapshot.knownFacets;
+    this.inspectedFacetId = snapshot.inspectedFacetId;
+    if (snapshot.spaceChangeSummary !== undefined) {
+      this.lastSpaceChangeSummary = snapshot.spaceChangeSummary;
     }
   }
 
@@ -2671,64 +2757,8 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     return isStructuralPlanPilotFacet(facet);
   }
 
-  private goalFacet(lastAction: PlanPilotUiFacet): PlanPilotUiFacet {
-    return {
-      id: "__goal__",
-      label: "Goal reached",
-      detail: "The displayed plan satisfies the planning goal.",
-      timestep: lastAction.timestep + 1,
-      action: "goal",
-      actionArguments: [],
-      group: "Goal",
-      selection: "positive",
-      remainingSolutions: this.solutionCountKnown ? this.solutionCount : null,
-      remainingFacets: 0,
-      solutionReduction: null,
-      facetReduction: null,
-      available: true,
-      parentId: lastAction.id,
-      nodeType: "goal",
-      tokens: ["goal", "reached"],
-      solutionContext: true,
-    };
-  }
-
   private isUserConstraint(facet: PlanPilotUiFacet): boolean {
-    if (this.isStructuralFacet(facet)) {
-      return false;
-    }
-    return (
-      facet.selection !== "neutral" &&
-      (facet.facetType === "selected" ||
-        Boolean(this.activePinnedFacets[facet.id]))
-    );
-  }
-
-  private compareGraphOrder(
-    left: PlanPilotUiFacet,
-    right: PlanPilotUiFacet,
-  ): number {
-    return (
-      this.graphOrderWeight(left) - this.graphOrderWeight(right) ||
-      left.timestep - right.timestep ||
-      left.label.localeCompare(right.label)
-    );
-  }
-
-  private graphOrderWeight(facet: PlanPilotUiFacet): number {
-    if (facet.selection === "positive") {
-      return 0;
-    }
-    if (facet.facetType === "implied") {
-      return 1;
-    }
-    if (!facet.available) {
-      return 4;
-    }
-    if (facet.selection === "negative") {
-      return 3;
-    }
-    return 2;
+    return facetIsUserConstraint(facet, this.facetPresentationContext());
   }
 
   private refreshFacets(): void {
@@ -2771,49 +2801,6 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
     );
   }
 
-  private decorateGraphFacet(
-    facet: PlanPilotUiFacet,
-  ): PlanPilotDecoratedGraphFacet {
-    const decorated = {
-      ...facet,
-      userConstraint:
-        this.isRequiredFacet(facet) || this.isForbiddenFacet(facet),
-      visualState: this.graphVisualState(facet),
-    };
-    return { ...decorated, meta: this.graphFacetMeta(decorated) };
-  }
-
-  private graphVisualState(facet: PlanPilotUiFacet): PlanPilotGraphVisualState {
-    if (facet.nodeType === "root") {
-      return "root";
-    }
-    if (facet.nodeType === "goal") {
-      return "goal";
-    }
-    if (facet.nodeType === "time") {
-      return "time";
-    }
-    if (this.isDisplayedPlanFacet(facet)) {
-      return "displayed-plan";
-    }
-    if (facet.facetType === "implied") {
-      return "implied";
-    }
-    if (facet.facetType === "empty") {
-      return "empty";
-    }
-    if (this.isForbiddenFacet(facet)) {
-      return "forbidden";
-    }
-    if (this.isRequiredFacet(facet)) {
-      return "required";
-    }
-    if (!facet.available) {
-      return facet.nodeType === "query" ? "query" : "unavailable";
-    }
-    return facet.nodeType === "query" ? "query" : "alternative";
-  }
-
   private isBackendFacet(facet: PlanPilotUiFacet): boolean {
     return this.facets.some((candidate) => candidate.id === facet.id);
   }
@@ -2826,27 +2813,6 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       this.isDisplayedPlanFacet(facet) &&
       (!backendFacet || backendFacet.selectable === false)
     );
-  }
-
-  private fixedDisplayedPlanImpact(count: number | null): PlanPilotFacetImpact {
-    return {
-      exact: count !== null,
-      comparableToCurrent: true,
-      require: {
-        available: true,
-        planReduction: count === null ? null : 0,
-        plansRemaining: count,
-        facetReduction: null,
-        facetsRemaining: null,
-      },
-      forbid: {
-        available: false,
-        planReduction: count === null ? null : 1,
-        plansRemaining: count === null ? null : 0,
-        facetReduction: null,
-        facetsRemaining: null,
-      },
-    };
   }
 
   private canPreviewFacetImpact(facet: PlanPilotUiFacet): boolean {
@@ -2873,47 +2839,17 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
       .subscribe({ error: () => undefined });
   }
 
-  private graphFacetMeta(facet: PlanPilotUiFacet): string {
-    const pending = this.pendingSelections[facet.id]?.selection;
-    if (facet.nodeType === "root") {
-      return this.solutionCountKnown
-        ? `${this.solutionCount} valid plan${this.solutionCount === 1 ? "" : "s"}`
-        : "valid plan count pending";
-    }
-    if (facet.nodeType === "goal") {
-      return "goal reached";
-    }
-    if (facet.facetType === "empty") {
-      return `unused bounded step · t${facet.timestep}`;
-    }
-    const timestep = facet.abstractTimeStep ? "any step" : `t${facet.timestep}`;
-    if (facet.selection === "negative") {
-      return `${pending === "negative" ? "forbid pending" : "forbidden by you"} · ${timestep}`;
-    }
-    if (facet.solutionContext && facet.facetType === "implied") {
-      return `in every plan · ${timestep}`;
-    }
-    if (facet.facetType === "implied") {
-      return `in every plan · ${timestep}`;
-    }
-    if (facet.solutionContext) {
-      const constraintText =
-        pending === "positive"
-          ? " · require pending"
-          : pending === "negative"
-            ? " · forbid pending"
-            : this.isUserConstraint(facet) && facet.selection === "positive"
-              ? " · required by you"
-              : "";
-      return `displayed plan${constraintText} · ${timestep}`;
-    }
-    if (this.isRequiredFacet(facet)) {
-      return `${pending === "positive" ? "require pending" : "required by you"} · ${timestep}`;
-    }
-    if (!facet.available) {
-      return `active constraint · ${timestep}`;
-    }
-    return `available · ${timestep}`;
+  private facetPresentationContext(): PlanPilotFacetPresentationContext {
+    return {
+      displayedPlanIds: new Set(
+        this.representativeSolution.map((facet) => facet.id),
+      ),
+      activePinnedFacetIds: new Set(Object.keys(this.activePinnedFacets)),
+      pendingSelections: this.pendingSelections,
+      solutionCount: this.solutionCountKnown ? this.solutionCount : null,
+      comparisonActive: this.comparisonGraphActive,
+      comparisonStates: this.comparisonGraphStates,
+    };
   }
 
   private graphDiagnosticFilename(generatedAt: string): string {
@@ -2928,34 +2864,10 @@ export class PlanPilotViewComponent implements OnInit, OnDestroy {
   }
 
   private errorMessage(error: unknown): string {
-    if (error && typeof error === "object" && "error" in error) {
-      const body = (error as { error?: { code?: string; message?: string } })
-        .error;
-      if (body?.code === "PLAN_SPACE_TOO_LARGE") {
-        return "PlanPilot did not finish in time. Try a smaller horizon or exact mode.";
-      }
-      if (body?.message) {
-        return body.message;
-      }
-    }
-    if (
-      error &&
-      typeof error === "object" &&
-      "message" in error &&
-      typeof (error as { message?: unknown }).message === "string"
-    ) {
-      return (error as { message: string }).message;
-    }
-    return "PlanPilot backend request failed.";
+    return planPilotError(error).message;
   }
 
   private isSelectionConflict(error: unknown): boolean {
-    if (!error || typeof error !== "object" || !("error" in error)) {
-      return false;
-    }
-    return (
-      (error as { error?: { code?: unknown } }).error?.code ===
-      "SELECTION_CONFLICT"
-    );
+    return hasPlanPilotErrorCode(error, "SELECTION_CONFLICT");
   }
 }

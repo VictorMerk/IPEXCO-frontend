@@ -1,4 +1,7 @@
-import { PlanPilotFacet } from "../../service/planpilot.service";
+import type {
+  PlanPilotFacet,
+  PlanPilotQueryResult,
+} from "../../service/planpilot.service";
 import { PlanPilotUiFacet } from "./planpilot-view.models";
 
 export interface PlanPilotImpactDirection {
@@ -14,6 +17,19 @@ export interface PlanPilotFacetImpact {
   comparableToCurrent: boolean;
   require: PlanPilotImpactDirection;
   forbid: PlanPilotImpactDirection;
+}
+
+export interface PlanPilotActionImpactView {
+  available: boolean | null;
+  totalPlans: number | null;
+  plansRemaining: number | null;
+  plansRemoved: number | null;
+  reductionPercent: number | null;
+}
+
+export interface PlanPilotParsedSelectionImpact {
+  impact: PlanPilotFacetImpact;
+  totalPlans: number | null;
 }
 
 export interface PlanPilotTimelineRow {
@@ -79,6 +95,104 @@ export function buildFacetImpactMap(
       ];
     }),
   );
+}
+
+export function parseSelectionImpact(
+  result: PlanPilotQueryResult | undefined,
+  facetId: string,
+): PlanPilotParsedSelectionImpact | undefined {
+  if (
+    result?.type !== "selectionImpact" ||
+    result.facetId !== facetId ||
+    !result.require ||
+    !result.forbid
+  ) {
+    return undefined;
+  }
+  const comparableToCurrent = result.comparableToCurrent === true;
+  return {
+    impact: {
+      exact: result.exact === true,
+      comparableToCurrent,
+      require: {
+        available: result.require.available,
+        planReduction: result.require.planReduction,
+        plansRemaining: result.require.plansRemaining,
+        facetReduction: null,
+        facetsRemaining: null,
+      },
+      forbid: {
+        available: result.forbid.available,
+        planReduction: result.forbid.planReduction,
+        plansRemaining: result.forbid.plansRemaining,
+        facetReduction: null,
+        facetsRemaining: null,
+      },
+    },
+    totalPlans:
+      comparableToCurrent &&
+      Number.isInteger(result.totalPlans) &&
+      (result.totalPlans ?? 0) > 0
+        ? result.totalPlans!
+        : null,
+  };
+}
+
+export function fixedDisplayedPlanImpact(
+  count: number | null,
+): PlanPilotFacetImpact {
+  return {
+    exact: count !== null,
+    comparableToCurrent: true,
+    require: {
+      available: true,
+      planReduction: count === null ? null : 0,
+      plansRemaining: count,
+      facetReduction: null,
+      facetsRemaining: null,
+    },
+    forbid: {
+      available: false,
+      planReduction: count === null ? null : 1,
+      plansRemaining: count === null ? null : 0,
+      facetReduction: null,
+      facetsRemaining: null,
+    },
+  };
+}
+
+export function buildActionImpactView(
+  impact: PlanPilotImpactDirection,
+  counterpart: PlanPilotImpactDirection,
+  comparableToCurrent: boolean,
+  knownSolutionCount: number | null,
+): PlanPilotActionImpactView {
+  const derivedTotal =
+    comparableToCurrent &&
+    impact.plansRemaining !== null &&
+    counterpart.plansRemaining !== null
+      ? impact.plansRemaining + counterpart.plansRemaining
+      : null;
+  const totalPlans = comparableToCurrent
+    ? (knownSolutionCount ?? derivedTotal)
+    : null;
+  return {
+    available: impact.available,
+    totalPlans,
+    plansRemaining: impact.plansRemaining,
+    plansRemoved:
+      totalPlans !== null && impact.plansRemaining !== null
+        ? Math.max(0, totalPlans - impact.plansRemaining)
+        : null,
+    reductionPercent:
+      totalPlans !== null && impact.plansRemaining !== null
+        ? Math.round(
+            ((totalPlans - impact.plansRemaining) / totalPlans) * 10_000,
+          ) / 100
+        : impact.planReduction === null || !comparableToCurrent
+          ? null
+          : Math.round(impact.planReduction * 10_000) / 100,
+  };
 }
 
 export function buildTimelineRows(
@@ -195,6 +309,45 @@ export function comparePlanSolutions(
   comparison.onlyA.sort(comparedActionOrder);
   comparison.onlyB.sort(comparedActionOrder);
   return comparison;
+}
+
+export type PlanPilotComparisonGraphState =
+  "same" | "moved" | "only-a" | "only-b";
+
+export function buildPlanComparisonGraphStates(
+  planA: PlanPilotUiFacet[],
+  planB: PlanPilotUiFacet[],
+): Record<string, PlanPilotComparisonGraphState> {
+  const states: Record<string, PlanPilotComparisonGraphState> = {};
+  const unmatchedB = [...planB];
+
+  for (const actionA of planA) {
+    const sameIndex = unmatchedB.findIndex(
+      (actionB) =>
+        actionSignature(actionB) === actionSignature(actionA) &&
+        actionB.timestep === actionA.timestep,
+    );
+    if (sameIndex >= 0) {
+      states[actionA.id] = "same";
+      states[unmatchedB[sameIndex].id] = "same";
+      unmatchedB.splice(sameIndex, 1);
+      continue;
+    }
+    const movedIndex = unmatchedB.findIndex(
+      (actionB) => actionSignature(actionB) === actionSignature(actionA),
+    );
+    if (movedIndex >= 0) {
+      states[actionA.id] = "moved";
+      states[unmatchedB[movedIndex].id] = "moved";
+      unmatchedB.splice(movedIndex, 1);
+      continue;
+    }
+    states[actionA.id] = "only-a";
+  }
+  unmatchedB.forEach((action) => {
+    states[action.id] = "only-b";
+  });
+  return states;
 }
 
 function impactDirection(
