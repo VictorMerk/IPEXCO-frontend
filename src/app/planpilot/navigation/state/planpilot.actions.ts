@@ -8,7 +8,6 @@ import {
   StartPlanPilotSessionResponse,
 } from "../domain/planpilot";
 
-// Start session
 export const startPlanPilotSession = createAction(
   "[planpilot] start session",
   props<{ request: StartPlanPilotSessionRequest }>(),
@@ -22,7 +21,6 @@ export const startPlanPilotSessionFailure = createAction(
   props<{ err: unknown }>(),
 );
 
-// Submit the staged selections (positive / negative / neutral) as one batch.
 export const submitPlanPilotSelections = createAction(
   "[planpilot] submit selections",
   props<{ requests: SelectPlanPilotFacetRequest[] }>(),
@@ -39,7 +37,6 @@ export const submitPlanPilotSelectionsFailure = createAction(
   props<{ err: unknown }>(),
 );
 
-// Query how many solutions (plans) are still consistent with the decisions.
 export const queryPlanPilotSolutionCount = createAction(
   "[planpilot] query solution count",
 );
@@ -52,8 +49,6 @@ export const queryPlanPilotSolutionCountFailure = createAction(
   props<{ err: unknown }>(),
 );
 
-// Enumerate the solutions (plans) still consistent with the decisions,
-// capped at 'limit' so large plan spaces stay renderable.
 export const queryPlanPilotSolutions = createAction(
   "[planpilot] query solutions",
   props<{ limit: number }>(),
@@ -67,8 +62,6 @@ export const queryPlanPilotSolutionsFailure = createAction(
   props<{ err: unknown }>(),
 );
 
-// Query, for every open facet, how many plans enforcing/forbidding it would
-// leave ('#!!'); the counts are merged into the stored facets.
 export const queryPlanPilotSolutionReduction = createAction(
   "[planpilot] query solution reduction",
 );
@@ -81,8 +74,6 @@ export const queryPlanPilotSolutionReductionFailure = createAction(
   props<{ err: unknown }>(),
 );
 
-// Query the implied facets ('|= %'): the landmarks forced by the committed
-// decisions (true in every remaining plan).
 export const queryPlanPilotImpliedFacets = createAction(
   "[planpilot] query implied facets",
 );
@@ -94,7 +85,6 @@ export const queryPlanPilotImpliedFacetsFailure = createAction(
   "[planpilot] query implied facets failure",
   props<{ err: unknown }>(),
 );
-// Hide the implied-facets panel without touching the backend.
 export const clearPlanPilotImpliedFacets = createAction(
   "[planpilot] clear implied facets",
 );

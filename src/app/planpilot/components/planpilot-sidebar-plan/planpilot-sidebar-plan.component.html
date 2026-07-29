@@ -19,7 +19,7 @@
       <input
         type="number"
         min="1"
-        max="100"
+        [max]="maxHorizon"
         step="1"
         [value]="sessionHorizon"
         (change)="horizonChange.emit($event)"
@@ -37,6 +37,7 @@
     <input
       type="checkbox"
       [checked]="sessionAbstractTimeSteps"
+      [disabled]="!supportsAbstractTimeSteps"
       (change)="abstractTimeStepsChange.emit($event)"
     />
     <span
@@ -68,96 +69,73 @@
   <div class="plan-calculation" data-testid="planpilot-plan-calculation">
     <div class="calculation-heading">
       <span
-        ><strong>Plan calculation</strong
-        ><small>Prepare plans for browsing.</small></span
+        ><strong>Plan count</strong
+        ><small>Count plans without loading them.</small></span
       >
       <span class="calculation-count">
         {{ solutionCountKnown ? solutionCount : knownPlanLowerBound + "+" }}
         found
       </span>
     </div>
-    <form
-      class="prepare-form"
-      (submit)="
-        $event.preventDefault(); plansPrepare.emit(planCount.valueAsNumber)
-      "
-    >
-      <label for="planpilot-prepare-count">Prepare through plan</label>
-      <input
-        #planCount
-        id="planpilot-prepare-count"
-        name="planCount"
-        type="number"
-        min="1"
-        step="1"
-        [value]="suggestedPlanPreparationCount"
-        required
-        [attr.max]="solutionCountKnown ? solutionCount : null"
-        [disabled]="
-          isBusy ||
-          configurationChanged ||
-          pendingSelectionCount > 0 ||
-          (solutionCountKnown && solutionCount < 1)
-        "
-      />
-      <button
-        mat-stroked-button
-        type="submit"
-        [disabled]="
-          isBusy ||
-          configurationChanged ||
-          pendingSelectionCount > 0 ||
-          (solutionCountKnown && solutionCount < 1)
-        "
+    <label class="analysis-timeout">
+      <span
+        ><strong>Analysis timeout</strong
+        ><small>Plan count, impact preview and plan loading.</small></span
       >
-        @if (planPreparationLoading) {
-          <mat-icon class="spinning-icon">sync</mat-icon>
-        }
-        {{ planPreparationLoading ? "Preparing…" : "Prepare" }}
-      </button>
-    </form>
+      <span class="timeout-input"
+        ><input
+          type="number"
+          min="5"
+          [max]="maxAnalysisTimeoutSeconds"
+          step="5"
+          [value]="analysisTimeoutSeconds"
+          [disabled]="isBusy"
+          (change)="analysisTimeoutChange.emit($event)"
+        /><small>s</small></span
+      >
+    </label>
     <div class="count-row">
       @if (solutionCountKnown) {
         <small>{{ solutionCount }} plans in this space.</small>
-        <button
-          mat-button
-          type="button"
-          [disabled]="
-            isBusy ||
-            configurationChanged ||
-            pendingSelectionCount > 0 ||
-            solutionCount < 1
-          "
-          (click)="plansPrepare.emit(solutionCount)"
-        >
-          Prepare all
-        </button>
       } @else {
-        <small
-          >Count all gets the exact total without loading every plan.</small
-        >
-        <button
-          mat-button
-          type="button"
-          [disabled]="
-            isBusy || configurationChanged || pendingSelectionCount > 0
-          "
-          (click)="solutionCountLoad.emit()"
-        >
-          @if (solutionCountLoading) {
-            <mat-icon class="spinning-icon">sync</mat-icon>
+        <small>
+          {{
+            solutionCountLoading
+              ? "The graph stays unchanged while PlanPilot counts."
+              : "The graph works without an exact total."
+          }}
+        </small>
+        <span class="count-actions">
+          <button
+            mat-button
+            type="button"
+            [disabled]="
+              isBusy || configurationChanged || pendingSelectionCount > 0
+            "
+            (click)="solutionCountLoad.emit()"
+          >
+            @if (solutionCountLoading) {
+              <mat-icon class="spinning-icon">sync</mat-icon>
+            }
+            {{ solutionCountLoading ? "Counting…" : "Count all" }}
+          </button>
+          @if (solutionCountLoading && canCancelOperation) {
+            <button
+              mat-button
+              type="button"
+              class="operation-cancel"
+              (click)="operationCancel.emit()"
+            >
+              Cancel
+            </button>
           }
-          {{ solutionCountLoading ? "Counting…" : "Count all" }}
-        </button>
+        </span>
       }
     </div>
     @if (configurationChanged) {
       <small class="analysis-note"
         >Rebuild before calculating this plan space.</small
       >
-    }
-    @if (planPreparationError) {
-      <small class="analysis-error">{{ planPreparationError }}</small>
     }
     @if (solutionCountError) {
       <small class="analysis-error">{{ solutionCountError }}</small>
@@ -184,11 +162,15 @@
         class="timeline-row"
         [class.active]="focusedTimestep === row.key"
         [attr.data-timestep]="row.key"
+        (mouseenter)="timestepHover.emit(row.key)"
+        (mouseleave)="timestepHover.emit(null)"
       >
         <button
           type="button"
           class="timeline-focus"
           [attr.aria-label]="'Focus ' + row.label + ' in graph'"
+          (focus)="timestepHover.emit(row.key)"
+          (blur)="timestepHover.emit(null)"
           (click)="timestepFocus.emit(row.key)"
         >
           <strong>{{ row.label }}</strong>

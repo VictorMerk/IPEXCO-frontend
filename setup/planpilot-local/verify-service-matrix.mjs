@@ -8,7 +8,7 @@ import {
 } from './lib/strips-validator.mjs';
 
 const serviceUrl = (process.env.PLANPILOT_URL ?? 'http://127.0.0.1:5000').replace(/\/+$/, '');
-const apiKey = process.env.PLANPILOT_API_KEY ?? 'test';
+const apiKey = process.env.PLANPILOT_API_KEY ?? 'ipexco-demo-api-key';
 const fixtureDirectory = resolve(
   dirname(fileURLToPath(import.meta.url)),
   '../example_data/planpilot-demo',

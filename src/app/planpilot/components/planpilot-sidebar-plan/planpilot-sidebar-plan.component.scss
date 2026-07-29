@@ -121,30 +121,35 @@
   gap: 2px;
 }
 
-.calculation-count {
-  color: var(--mat-sys-on-surface-variant);
-  font-size: 0.75rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.prepare-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px auto;
-  gap: var(--spacing-100);
+.analysis-timeout {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-100);
 }
 
-.prepare-form label {
+.analysis-timeout > span:first-child {
+  display: grid;
+  gap: 2px;
+  font-size: 0.78rem;
+}
+
+.analysis-timeout small {
   color: var(--mat-sys-on-surface-variant);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
 
-.prepare-form input {
+.timeout-input {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-050);
+}
+
+.timeout-input input {
   box-sizing: border-box;
-  width: 100%;
-  min-height: 34px;
-  padding: 0 var(--spacing-100);
+  width: 64px;
+  min-height: 32px;
+  padding: 0 var(--spacing-050);
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 6px;
   color: var(--mat-sys-on-surface);
@@ -153,10 +158,26 @@
   font-variant-numeric: tabular-nums;
 }
 
-.prepare-form button,
+.calculation-count {
+  color: var(--mat-sys-on-surface-variant);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .count-row button {
   min-width: 0;
   white-space: nowrap;
+}
+
+.count-actions {
+  display: inline-flex;
+  gap: var(--spacing-050);
+  align-items: center;
+}
+
+.operation-cancel {
+  color: var(--mat-sys-error);
 }
 
 .spinning-icon {

@@ -5,20 +5,30 @@
     </app-dialog-title>
   </app-dialog-header>
   <app-dialog-content>
-    <form [formGroup]="loginForm">
+    <form [formGroup]="loginForm" (ngSubmit)="onLogin()">
       <mat-form-field class="form-inputs" appearance="outline">
         <mat-label>User name</mat-label>
         <input matInput type="text" formControlName="name" />
+        @if (loginForm.controls.name.hasError('required')) {
+          <mat-error>Please enter a user name.</mat-error>
+        }
       </mat-form-field>
 
       <mat-form-field class="form-inputs" appearance="outline">
         <mat-label>Password</mat-label>
         <input matInput type="password" formControlName="password" />
+        @if (loginForm.controls.password.hasError('required')) {
+          <mat-error>Please enter a password.</mat-error>
+        }
       </mat-form-field>
+
+      @if (loginFailed$ | async) {
+        <p>Login failed. Check your user name and password.</p>
+      }
     </form>
   </app-dialog-content>
   <app-dialog-footer>
     <button mat-button (click)="onBack()"> Cancel </button>
-    <button mat-flat-button (click)="onLogin()">Login</button>
+    <button mat-flat-button (click)="onLogin()" [disabled]="loginForm.invalid">Login</button>
   </app-dialog-footer>
 </app-dialog>

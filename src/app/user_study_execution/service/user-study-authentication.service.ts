@@ -9,10 +9,10 @@ import {User} from '../../user/domain/user';
 export class UserStudyAuthenticationService {
 
   private http = inject(HttpClient)
-  private BASE_URL = environment.apiURL + 'users/';
+  private BASE_URL = environment.apiURL + 'users';
 
   register(userStudyId: string, prolificId: string | null): Observable<{user: User; token: string}> {
-    return this.http.post<IHTTPData<{user: User; token: string}>>(this.BASE_URL + 'user-study', {userStudyId, prolificId}).pipe(
+    return this.http.post<IHTTPData<{user: User; token: string}>>(this.BASE_URL + '/user-study', {userStudyId, prolificId}).pipe(
       map(({data}) => data)
     )
   }

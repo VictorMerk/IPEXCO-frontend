@@ -48,6 +48,24 @@ export interface PlanPilotConfiguration {
   abstractTimeSteps: boolean;
 }
 
+export interface PlanPilotCapabilities {
+  serviceId: string;
+  serviceName: string;
+  apiVersion: string;
+  maxHorizon: number;
+  maxActiveSessions: number;
+  maxConcurrentCreations: number;
+  sessionTtlSeconds: number;
+  maxCachedSolutions: number;
+  defaultQueryTimeoutSeconds?: number;
+  maxQueryTimeoutSeconds?: number;
+  encodings: PlanPilotEncoding[];
+  supportsAbstractTimeSteps: boolean;
+  supportsStateFacets: boolean;
+  supportsAsyncJobs: boolean;
+  asyncJobTypes?: PlanPilotQueryJobType[];
+}
+
 export interface StartPlanPilotSessionRequest {
   projectId: string;
   horizon: number;
@@ -125,10 +143,64 @@ export interface StopPlanPilotSessionResponse {
   status: string;
 }
 
+export type PlanPilotQueryJobType =
+  "solution" | "solutionCount" | "selectionImpact";
+export type PlanPilotQueryJobStatus =
+  "queued" | "running" | "succeeded" | "failed" | "cancelled";
+
+export interface PlanPilotQueryJob {
+  runId: string;
+  jobId: string;
+  expiresAt: string;
+  type: PlanPilotQueryJobType;
+  status: PlanPilotQueryJobStatus;
+  selectionRevision: number;
+  facetId?: string;
+  solutionStart?: number;
+  solutionNumber?: number;
+  timeoutSeconds?: number;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  result?: PlanPilotQueryResult;
+  error?: { code: string; message: string };
+}
+
+export interface PlanPilotManagedSession {
+  runId: string;
+  externalSessionId?: string;
+  status: string;
+  configuration: PlanPilotConfiguration;
+  error?: string;
+  expiresAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  projectId: string;
+  projectName: string;
+}
+
 @Injectable({ providedIn: "root" })
 export class PlanPilotService {
   private http = inject(HttpClient);
-  private baseUrl = environment.apiURL + "planpilot/sessions";
+  private planPilotUrl = environment.apiURL + "planpilot";
+  private baseUrl = this.planPilotUrl + "/sessions";
+
+  getCapabilities$(projectId: string): Observable<PlanPilotCapabilities> {
+    return this.http.get<PlanPilotCapabilities>(
+      `${this.planPilotUrl}/capabilities/${encodeURIComponent(projectId)}`,
+    );
+  }
+
+  listSessions$(projectId?: string): Observable<{
+    sessions: PlanPilotManagedSession[];
+  }> {
+    const query = projectId
+      ? `?projectId=${encodeURIComponent(projectId)}`
+      : "";
+    return this.http.get<{ sessions: PlanPilotManagedSession[] }>(
+      `${this.baseUrl}${query}`,
+    );
+  }
 
   startSession$(
     request: StartPlanPilotSessionRequest,
@@ -161,12 +233,14 @@ export class PlanPilotService {
     runId: string,
     type: PlanPilotQueryType,
     solutionNumber?: number,
+    timeoutSeconds?: number,
   ): Observable<PlanPilotQueryResponse> {
     return this.http.post<PlanPilotQueryResponse>(
       `${this.baseUrl}/${runId}/query`,
       {
         type,
         ...(solutionNumber === undefined ? {} : { solutionNumber }),
+        ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
       },
     );
   }
@@ -174,10 +248,44 @@ export class PlanPilotService {
   selectionImpact$(
     runId: string,
     facetId: string,
+    timeoutSeconds?: number,
   ): Observable<PlanPilotQueryResponse> {
     return this.http.post<PlanPilotQueryResponse>(
       `${this.baseUrl}/${runId}/query`,
-      { type: "selectionImpact", facetId },
+      {
+        type: "selectionImpact",
+        facetId,
+        ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+      },
+    );
+  }
+
+  startQueryJob$(
+    runId: string,
+    request: {
+      type: PlanPilotQueryJobType;
+      facetId?: string;
+      solutionStart?: number;
+      solutionNumber?: number;
+      expectedSelectionRevision?: number;
+      timeoutSeconds?: number;
+    },
+  ): Observable<PlanPilotQueryJob> {
+    return this.http.post<PlanPilotQueryJob>(
+      `${this.baseUrl}/${runId}/jobs`,
+      request,
+    );
+  }
+
+  getQueryJob$(runId: string, jobId: string): Observable<PlanPilotQueryJob> {
+    return this.http.get<PlanPilotQueryJob>(
+      `${this.baseUrl}/${runId}/jobs/${encodeURIComponent(jobId)}`,
+    );
+  }
+
+  cancelQueryJob$(runId: string, jobId: string): Observable<PlanPilotQueryJob> {
+    return this.http.delete<PlanPilotQueryJob>(
+      `${this.baseUrl}/${runId}/jobs/${encodeURIComponent(jobId)}`,
     );
   }
 

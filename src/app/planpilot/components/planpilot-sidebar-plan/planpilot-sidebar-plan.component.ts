@@ -13,6 +13,8 @@ export type PlanPilotTimelineKey = number | "any";
 })
 export class PlanPilotSidebarPlanComponent {
   @Input() sessionHorizon = 1;
+  @Input() maxHorizon = 100;
+  @Input() supportsAbstractTimeSteps = true;
   @Input() sessionEncoding: "exact" | "bounded" = "bounded";
   @Input() sessionAbstractTimeSteps = false;
   @Input() activeSessionHorizon = 1;
@@ -28,8 +30,9 @@ export class PlanPilotSidebarPlanComponent {
   @Input() knownPlanLowerBound = 0;
   @Input() solutionCountLoading = false;
   @Input() solutionCountError = "";
-  @Input() planPreparationLoading = false;
-  @Input() planPreparationError = "";
+  @Input() canCancelOperation = false;
+  @Input() analysisTimeoutSeconds = 30;
+  @Input() maxAnalysisTimeoutSeconds = 300;
   @Input() timelineRows: PlanPilotTimelineRow[] = [];
   @Input() focusedTimestep: PlanPilotTimelineKey | null = null;
   @Input() timestepActionCounts: Record<string, number> = {};
@@ -39,13 +42,9 @@ export class PlanPilotSidebarPlanComponent {
   @Output() abstractTimeStepsChange = new EventEmitter<Event>();
   @Output() rebuild = new EventEmitter<void>();
   @Output() solutionCountLoad = new EventEmitter<void>();
-  @Output() plansPrepare = new EventEmitter<number>();
+  @Output() operationCancel = new EventEmitter<void>();
+  @Output() analysisTimeoutChange = new EventEmitter<Event>();
   @Output() timestepFocus = new EventEmitter<PlanPilotTimelineKey>();
   @Output() timestepActions = new EventEmitter<PlanPilotTimelineKey>();
-
-  get suggestedPlanPreparationCount(): number {
-    return this.solutionCountKnown
-      ? Math.max(1, Math.min(20, this.solutionCount))
-      : 20;
-  }
+  @Output() timestepHover = new EventEmitter<PlanPilotTimelineKey | null>();
 }

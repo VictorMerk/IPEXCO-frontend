@@ -6,6 +6,7 @@ import { userFeature } from "./user.feature";
 export const selectUser = createSelector(userFeature.selectUserFeatureState, (state) => state.user.data)
 export const selectToken = createSelector(userFeature.selectUserFeatureState, (state) => state.token.data)
 export const selectTokenLoadingState = createSelector(userFeature.selectUserFeatureState, (state) => state.token.state)
+export const selectUserLoadingState = createSelector(userFeature.selectUserFeatureState, (state) => state.user.state)
 
 
 export const selectLoggedIn = createSelector(userFeature.selectUserFeatureState, (state) =>
