@@ -28,7 +28,8 @@ import {
 } from "../planpilot.actions";
 import { selectRunId } from "../planpilot.feature";
 
-// How many plans are listed at once; the user can request further pages.
+// Plans shown on first load; "Show more" then adds SOLUTION_PAGE_SIZE each time.
+export const SOLUTION_INITIAL_LIMIT = 5;
 export const SOLUTION_PAGE_SIZE = 25;
 
 @Injectable()
@@ -115,7 +116,7 @@ export class PlanPilotEffect {
     ofType(queryPlanPilotSolutionCountSuccess, queryPlanPilotSolutionCountFailure),
     map((action) =>
       action.type === queryPlanPilotSolutionCountFailure.type || action.count === undefined || action.count > 0
-        ? queryPlanPilotSolutions({ limit: SOLUTION_PAGE_SIZE })
+        ? queryPlanPilotSolutions({ limit: SOLUTION_INITIAL_LIMIT })
         : queryPlanPilotSolutionsSuccess({ solutions: [] }),
     ),
   ));
