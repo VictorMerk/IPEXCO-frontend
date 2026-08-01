@@ -156,9 +156,19 @@
     <mat-form-field class="facet-search" subscriptSizing="dynamic">
       <mat-label>Filter facets</mat-label>
       <mat-select [formControl]="filterControl">
-        <mat-option value="">All facets</mat-option>
-        @for (label of filterOptions$ | async; track label) {
-          <mat-option [value]="label">{{ label }}</mat-option>
+        <mat-option value="">All actions</mat-option>
+        @for (action of filterOptions$ | async; track action) {
+          <mat-option [value]="action">{{ action }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field class="facet-search" subscriptSizing="dynamic">
+      <mat-label>Filter timestep</mat-label>
+      <mat-select [formControl]="timestepControl">
+        <mat-option value="">All timesteps</mat-option>
+        @for (option of timestepOptions$ | async; track option.value) {
+          <mat-option [value]="option.value">{{ option.label }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
@@ -312,7 +322,7 @@
               </mat-expansion-panel>
             }
           </mat-accordion>
-        } @else if (filterControl.value) {
+        } @else if (hasActiveFilter()) {
           <p class="status">No open decisions match the filter.</p>
         } @else if (runId$ | async) {
           <p class="status">
@@ -374,7 +384,7 @@
               </li>
             }
           </ul>
-        } @else if (filterControl.value) {
+        } @else if (hasActiveFilter()) {
           <p class="status">No made decisions match the filter.</p>
         } @else {
           <p class="status">No decisions made yet.</p>

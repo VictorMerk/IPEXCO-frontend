@@ -74,6 +74,15 @@
     font-style: italic;
     color: rgba(0, 0, 0, 0.6);
   }
+
+  // Pinned just above the open decisions so it stays visible while scrolling.
+  &--sticky {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0.5rem 0;
+    background: var(--mat-sys-surface, #fff);
+  }
 }
 
 .solutions {
