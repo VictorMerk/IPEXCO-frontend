@@ -105,8 +105,14 @@ export class PlanPilotFacetsComponent {
     this.route.paramMap.pipe(map((params) => params.get("projectId"))),
   );
 
+  // Action-name filter ("" = show all).
   filterControl = this.fb.nonNullable.control("");
   private filterLabel$ = this.filterControl.valueChanges.pipe(startWith(""));
+
+  // Timestep filter ("" = all; "any" = abstract/no timestep; otherwise the
+  // timestep as a string). Applied together with the action filter.
+  timestepControl = this.fb.nonNullable.control("");
+  private filterTimestep$ = this.timestepControl.valueChanges.pipe(startWith(""));
 
   // Selections stay local until they are submitted together.
   pending = signal<Map<string, SelectPlanPilotFacetRequest>>(new Map());
@@ -117,23 +123,39 @@ export class PlanPilotFacetsComponent {
   private runId = toSignal(this.runId$);
   facets$ = this.store.select(selectFacets);
   decisions$ = this.store.select(selectDecisions);
+  // Filter dropdown options: distinct action names without parameters
+  // (pick-up, stack, …). State (holds) facets are excluded from the filter.
   filterOptions$ = combineLatest([this.facets$, this.decisions$]).pipe(
     map(([facets, decisions]) =>
-      this.distinctLabels([...facets, ...decisions]),
+      this.actionNames(
+        [...facets, ...decisions].filter(
+          (facet) => this.facetKind(facet) === "occurs",
+        ),
+      ),
     ),
+  );
+  // Timestep dropdown options: the distinct timesteps present (open + decided),
+  // ascending, with an "any time" entry last for abstract facets.
+  timestepOptions$ = combineLatest([this.facets$, this.decisions$]).pipe(
+    map(([facets, decisions]) => this.timestepOptions([...facets, ...decisions])),
   );
   filteredFacets$ = combineLatest([
     this.facets$,
     this.pending$,
     this.filterLabel$,
+    this.filterTimestep$,
   ]).pipe(
-    map(([facets, pending, label]) =>
-      this.filterByLabel(
-        facets.filter(
-          (facet) =>
-            isSelectableFacet(facet) && !this.isStagedChoice(pending, facet.id),
+    map(([facets, pending, label, timestep]) =>
+      this.filterByTimestep(
+        this.filterByLabel(
+          facets.filter(
+            (facet) =>
+              isSelectableFacet(facet) &&
+              !this.isStagedChoice(pending, facet.id),
+          ),
+          label,
         ),
-        label,
+        timestep,
       ),
     ),
   );
@@ -145,9 +167,10 @@ export class PlanPilotFacetsComponent {
     this.facets$,
     this.pending$,
     this.filterLabel$,
+    this.filterTimestep$,
   ]).pipe(
-    map(([decisions, facets, pending, label]) =>
-      this.buildDecisionRows(decisions, facets, pending, label),
+    map(([decisions, facets, pending, label, timestep]) =>
+      this.buildDecisionRows(decisions, facets, pending, label, timestep),
     ),
   );
   solutionCount$ = this.store.select(selectSolutionCount);
@@ -282,6 +305,7 @@ export class PlanPilotFacetsComponent {
     facets: PlanPilotFacet[],
     pending: Map<string, SelectPlanPilotFacetRequest>,
     label: string,
+    timestep: string,
   ): DecisionRow[] {
     const rows: DecisionRow[] = [];
     const decisionIds = new Set(decisions.map((d) => d.id));
@@ -317,12 +341,14 @@ export class PlanPilotFacetsComponent {
       });
     }
 
-    const filtered = label
-      ? rows.filter((row) => row.facet.label === label)
-      : rows;
-    return filtered.sort((a, b) =>
-      this.byTimestep(a.facet.timestep, b.facet.timestep),
+    const filtered = this.filterByTimestep(
+      this.filterByLabel(rows.map((row) => row.facet), label),
+      timestep,
     );
+    const filteredIds = new Set(filtered.map((facet) => facet.id));
+    return rows
+      .filter((row) => filteredIds.has(row.facet.id))
+      .sort((a, b) => this.byTimestep(a.facet.timestep, b.facet.timestep));
   }
 
   submit(): void {
@@ -408,20 +434,69 @@ export class PlanPilotFacetsComponent {
     return a - b;
   }
 
+  // Keep only facets of the selected action ("" = no filter). The filter value
+  // is a parameter-less action name, so it matches every action of that kind.
   private filterByLabel(
     facets: PlanPilotFacet[],
-    label: string,
+    action: string,
   ): PlanPilotFacet[] {
-    if (!label) {
+    if (!action) {
       return facets;
     }
-    return facets.filter((facet) => facet.label === label);
+    return facets.filter((facet) => this.actionName(facet) === action);
   }
 
-  private distinctLabels(facets: PlanPilotFacet[]): string[] {
-    return [...new Set(facets.map((facet) => facet.label))].sort((a, b) =>
-      a.localeCompare(b),
+  // Keep only facets at the selected timestep ("" = all; "any" = no timestep).
+  private filterByTimestep(
+    facets: PlanPilotFacet[],
+    timestep: string,
+  ): PlanPilotFacet[] {
+    if (!timestep) {
+      return facets;
+    }
+    if (timestep === "any") {
+      return facets.filter((facet) => facet.timestep === null);
+    }
+    return facets.filter((facet) => facet.timestep === Number(timestep));
+  }
+
+  // The parameter-less action name of a facet, i.e. the first token of its
+  // label (action names contain no spaces; parameters follow).
+  private actionName(facet: PlanPilotFacet): string {
+    return facet.label.split(" ")[0];
+  }
+
+  // Sorted, de-duplicated action names (pick-up, stack, …) for the filter.
+  private actionNames(facets: PlanPilotFacet[]): string[] {
+    return [...new Set(facets.map((facet) => this.actionName(facet)))].sort(
+      (a, b) => a.localeCompare(b),
     );
+  }
+
+  // Distinct timesteps present, ascending, with "any time" (null) listed last.
+  private timestepOptions(
+    facets: PlanPilotFacet[],
+  ): { value: string; label: string }[] {
+    const numbers = [
+      ...new Set(
+        facets
+          .map((facet) => facet.timestep)
+          .filter((timestep): timestep is number => timestep !== null),
+      ),
+    ].sort((a, b) => a - b);
+    const options = numbers.map((timestep) => ({
+      value: String(timestep),
+      label: `t = ${timestep}`,
+    }));
+    if (facets.some((facet) => facet.timestep === null)) {
+      options.push({ value: "any", label: "any time" });
+    }
+    return options;
+  }
+
+  // Whether any facet filter is active (used for the "no match" messages).
+  hasActiveFilter(): boolean {
+    return !!this.filterControl.value || !!this.timestepControl.value;
   }
 
   showMorePlans(): void {
