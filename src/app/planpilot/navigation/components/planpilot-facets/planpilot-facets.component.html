@@ -99,18 +99,6 @@
       <p class="remaining-plans">Remaining plans: {{ solutionCount }}</p>
     }
 
-    @if (countLoading) {
-      <div class="recalculating">
-        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        <span class="recalculating__label">Counting all remaining plans …</span>
-      </div>
-    } @else if (solutionsLoading) {
-      <div class="recalculating">
-        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-        <span class="recalculating__label">Loading plans …</span>
-      </div>
-    }
-
     @if (solutions$ | async; as solutions) {
       @if (solutions.length > 0) {
         <p class="solutions__summary">
@@ -203,6 +191,17 @@
       >
         Submit
       </button>
+    </div>
+  }
+
+  <!-- Recalculation indicator, kept just above "Show implied facets" and sticky
+       so it stays visible even when the remaining-plans list is long. -->
+  @if (countLoading || solutionsLoading) {
+    <div class="recalculating recalculating--sticky">
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+      <span class="recalculating__label">
+        {{ countLoading ? "Counting all remaining plans …" : "Loading plans …" }}
+      </span>
     </div>
   }
 
