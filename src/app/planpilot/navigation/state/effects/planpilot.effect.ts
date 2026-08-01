@@ -28,6 +28,8 @@ import {
 } from "../planpilot.actions";
 import { selectReplacedRunId, selectRunId } from "../planpilot.feature";
 
+// Plans listed on first load; "Show more" then adds SOLUTION_PAGE_SIZE each time.
+export const SOLUTION_INITIAL_LIMIT = 5;
 export const SOLUTION_PAGE_SIZE = 25;
 
 @Injectable()
@@ -35,6 +37,15 @@ export class PlanPilotEffect {
   private actions$ = inject(Actions);
   private service = inject(PlanPilotService);
   private store = inject(Store);
+
+  // Automatically list the first page of plans after a session starts or the
+  // staged selections are applied. Counting the whole space stays on-demand.
+  public refreshSolutions$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(startPlanPilotSessionSuccess, submitPlanPilotSelectionsSuccess),
+      map(() => queryPlanPilotSolutions({ limit: SOLUTION_INITIAL_LIMIT })),
+    ),
+  );
 
   public startSession$ = createEffect(() =>
     this.actions$.pipe(
