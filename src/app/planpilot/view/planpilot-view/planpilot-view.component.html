@@ -51,8 +51,11 @@
           [facets]="graphFacets"
           [connections]="graphConnections"
           [selectedFacetId]="inspectedFacetId"
+          [hoveredFacetId]="hoveredFacetId"
+          [highlightedTimestep]="highlightedGraphTimestep"
           [horizon]="displayedSessionHorizon"
           (facetSelected)="selectFacetFromGraph($event)"
+          (facetHovered)="hoverFacet($event)"
         ></app-planpilot-graph>
 
         <div class="canvas-header" data-testid="planpilot-canvas-header">
@@ -89,6 +92,11 @@
                 ><span>{{
                   activeOperationLabel || "PlanPilot is working"
                 }}</span>
+                @if (canCancelActiveQueryJob) {
+                  <button type="button" (click)="cancelActiveQueryJob()">
+                    Cancel
+                  </button>
+                }
               </div>
             }
 
@@ -171,6 +179,20 @@
               <span>All {{ totalGraphDomainFacetCount }} actions shown</span
               ><button mat-button type="button" (click)="collapseGraphFacets()">
                 Fewer
+              </button>
+            </div>
+          }
+          @if (comparisonGraphActive) {
+            <div class="graph-comparison-bar">
+              <strong
+                >Plan {{ comparisonPlanA }} vs. {{ comparisonPlanB }}</strong
+              >
+              <span><i class="compare-key same"></i>Same</span>
+              <span><i class="compare-key moved"></i>Moved</span>
+              <span><i class="compare-key only-a"></i>Only A</span>
+              <span><i class="compare-key only-b"></i>Only B</span>
+              <button type="button" (click)="clearGraphComparison()">
+                Close
               </button>
             </div>
           }
@@ -373,6 +395,10 @@
           >
             <app-planpilot-sidebar-plan
               [sessionHorizon]="sessionHorizon"
+              [maxHorizon]="maxSessionHorizon"
+              [supportsAbstractTimeSteps]="
+                capabilities?.supportsAbstractTimeSteps !== false
+              "
               [sessionEncoding]="sessionEncoding"
               [sessionAbstractTimeSteps]="sessionAbstractTimeSteps"
               [activeSessionHorizon]="activeSessionHorizon"
@@ -388,8 +414,9 @@
               [knownPlanLowerBound]="knownPlanLowerBound"
               [solutionCountLoading]="solutionCountLoading"
               [solutionCountError]="solutionCountError"
-              [planPreparationLoading]="planPreparationLoading"
-              [planPreparationError]="planPreparationError"
+              [canCancelOperation]="canCancelActiveQueryJob"
+              [analysisTimeoutSeconds]="analysisTimeoutSeconds"
+              [maxAnalysisTimeoutSeconds]="maxAnalysisTimeoutSeconds"
               [timelineRows]="timelineRows"
               [focusedTimestep]="focusedTimestep"
               [timestepActionCounts]="timestepActionCounts"
@@ -398,9 +425,11 @@
               (abstractTimeStepsChange)="updateAbstractTimeSteps($event)"
               (rebuild)="applySessionConfiguration()"
               (solutionCountLoad)="loadSolutionCount()"
-              (plansPrepare)="preparePlansThrough($event)"
+              (operationCancel)="cancelActiveQueryJob()"
+              (analysisTimeoutChange)="updateAnalysisTimeout($event)"
               (timestepFocus)="focusTimelineTimestep($event)"
               (timestepActions)="showActionsAtTimestep($event)"
+              (timestepHover)="hoverTimestep($event)"
             ></app-planpilot-sidebar-plan>
           </div>
 
@@ -431,12 +460,21 @@
               [planPageStart]="planPageStart"
               [planPageEnd]="planPageEnd"
               [planPageError]="planPageError"
+              [loadedPlanCount]="loadedPlanCount"
+              [cachedPlanNumbers]="cachedPlanNumbers"
+              [nextPlanBatchStart]="nextPlanBatchStart"
+              [nextPlanBatchEnd]="nextPlanBatchEnd"
+              [hasMorePlanBatches]="hasMorePlanBatches"
+              [planBatchLoading]="planPreparationLoading"
+              [planBatchError]="planPreparationError"
+              [canCancelOperation]="canCancelActiveQueryJob"
               [comparisonPlanA]="comparisonPlanA"
               [comparisonPlanB]="comparisonPlanB"
               [comparison]="comparison"
               [comparisonLoading]="comparisonLoading"
               [comparisonError]="comparisonError"
               [comparisonHasChanges]="comparisonHasChanges"
+              [comparisonGraphActive]="comparisonGraphActive"
               (solutionShow)="showSolution($event)"
               (solutionJump)="jumpToSolution($event)"
               (constraintsClear)="resetSessionView()"
@@ -444,8 +482,12 @@
               (planPageLoad)="loadPlanPage($event)"
               (planPagePrevious)="previousPlanPage()"
               (planPageNext)="nextPlanPage()"
+              (planBatchLoad)="loadNextPlanBatch()"
+              (operationCancel)="cancelActiveQueryJob()"
               (comparisonPlanChange)="updatePlanComparison($event)"
               (plansCompare)="compareSelectedPlans()"
+              (comparisonPlanShow)="showSolution($event)"
+              (graphComparisonClear)="clearGraphComparison()"
             ></app-planpilot-sidebar-plans>
           </div>
 
@@ -471,14 +513,18 @@
               [impactLoading]="impactLoading"
               [impactError]="impactError"
               [impactNotice]="impactNotice"
+              [canCancelOperation]="canCancelActiveQueryJob"
               [lastSpaceChangeSummary]="lastSpaceChangeSummary"
+              [hoveredFacetId]="hoveredFacetId"
               (selectedActionClose)="clearInspectedFacet()"
               (selectionChange)="applyActionSelection($event)"
               (impactCalculate)="calculateImpact()"
+              (operationCancel)="cancelActiveQueryJob()"
               (timestepClear)="clearTimestepFilter()"
               (queryChange)="updateQueryValue($event)"
               (filterChange)="setFilter($event)"
               (facetSelect)="selectFacet($event)"
+              (facetHover)="hoverFacet($event)"
               (showMore)="showMoreFacets()"
               (showAll)="showAllFacets()"
               (showFewer)="collapseFacetList()"

@@ -136,6 +136,30 @@ describe("PlanPilotSidebarPlansComponent", () => {
     );
   });
 
+  it("marks selectable plan rows as clickable", () => {
+    component.displayedPlanActions = [
+      { id: "move-1", label: "move a", timestepLabel: "t1" },
+    ];
+    component.planSummaries = [
+      { number: 1, title: "Plan 1", text: "1 action" },
+    ];
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector(
+      ".plan-summary-row",
+    ) as HTMLButtonElement;
+    expect(row.disabled).toBeFalse();
+    expect(getComputedStyle(row).cursor).toBe("pointer");
+
+    component.isBusy = true;
+    fixture.detectChanges();
+    const disabledRow = fixture.nativeElement.querySelector(
+      ".plan-summary-row",
+    ) as HTMLButtonElement;
+    expect(disabledRow.disabled).toBeTrue();
+    expect(getComputedStyle(disabledRow).cursor).not.toBe("pointer");
+  });
+
   it("emits a direct plan jump from the number form", () => {
     component.displayedPlanActions = [
       { id: "move-1", label: "move a", timestepLabel: "t1" },

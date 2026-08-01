@@ -16,6 +16,7 @@ export interface PlanPilotActionRowView {
   required: boolean;
   forbidden: boolean;
   selected: boolean;
+  unavailableReason?: string;
 }
 
 export interface PlanPilotSelectedActionView extends PlanPilotActionRowView {
@@ -62,7 +63,9 @@ export class PlanPilotSidebarActionsComponent {
   @Input() impactLoading = false;
   @Input() impactError = "";
   @Input() impactNotice = "";
+  @Input() canCancelOperation = false;
   @Input() lastSpaceChangeSummary = "";
+  @Input() hoveredFacetId?: string;
 
   @Output() selectedActionClose = new EventEmitter<void>();
   @Output() selectionChange = new EventEmitter<{
@@ -70,10 +73,12 @@ export class PlanPilotSidebarActionsComponent {
     selection: FacetSelection;
   }>();
   @Output() impactCalculate = new EventEmitter<void>();
+  @Output() operationCancel = new EventEmitter<void>();
   @Output() timestepClear = new EventEmitter<void>();
   @Output() queryChange = new EventEmitter<string>();
   @Output() filterChange = new EventEmitter<FacetFilter>();
   @Output() facetSelect = new EventEmitter<string>();
+  @Output() facetHover = new EventEmitter<string | undefined>();
   @Output() showMore = new EventEmitter<void>();
   @Output() showAll = new EventEmitter<void>();
   @Output() showFewer = new EventEmitter<void>();

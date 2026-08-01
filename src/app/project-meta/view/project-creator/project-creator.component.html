@@ -56,6 +56,12 @@
               [valid]="pddlModelValid$ | async">
               Upload PDDL problem File
             </app-template-file-upload>
+            @if (pddlParsing$ | async) {
+              <p>Checking PDDL files...</p>
+            }
+            @if (pddlError$ | async; as pddlError) {
+              <p>{{ pddlError }}</p>
+            }
           }
 
           @if((selectedDomain$ | async)?.encoding === encoding.PDDL_NUMERIC){

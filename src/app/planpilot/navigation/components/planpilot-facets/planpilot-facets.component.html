@@ -1,7 +1,6 @@
 <section class="planpilot">
   <h3>PlanPilot – Facet Navigation</h3>
 
-  <!-- Start form -->
   <form [formGroup]="startForm" (ngSubmit)="startSession()" class="start-form">
     <mat-form-field>
       <mat-label>Horizon</mat-label>
@@ -17,7 +16,9 @@
       </mat-select>
     </mat-form-field>
 
-    <mat-checkbox formControlName="abstractTimeSteps">Abstract time steps</mat-checkbox>
+    <mat-checkbox formControlName="abstractTimeSteps"
+      >Abstract time steps</mat-checkbox
+    >
 
     <button
       mat-raised-button
@@ -29,24 +30,87 @@
     </button>
   </form>
 
-  <!-- Status -->
   @if (loading$ | async) {
     <p class="status">Loading …</p>
   }
   @if (error$ | async; as error) {
-    <p class="status status--error">Error: {{ error }}</p>
+    <p class="status status--error">{{ error }}</p>
   }
 
-  <!-- Remaining plans (count + enumeration), with recalculation feedback -->
+  @if (configuration$ | async; as configuration) {
+    @let requestedHorizon = requestedHorizon$ | async;
+    @let minimumHorizon = minimumHorizon$ | async;
+    <div class="session-summary">
+      <strong>Active plan space</strong>
+      <span>
+        {{ configuration.encoding }} · horizon {{ configuration.horizon }}
+      </span>
+      @if (
+        requestedHorizon !== null &&
+        requestedHorizon !== undefined &&
+        requestedHorizon < configuration.horizon
+      ) {
+        <small>
+          Horizon {{ requestedHorizon }} was below the shortest plan. PlanPilot
+          is using {{ configuration.horizon }}.
+        </small>
+      } @else if (minimumHorizon !== null && minimumHorizon !== undefined) {
+        <small>Shortest plan: {{ minimumHorizon }} actions.</small>
+      }
+    </div>
+  }
+
   @let solutionsLoading = solutionsLoading$ | async;
+  @let countLoading = countLoading$ | async;
+  @let reductionLoading = reductionLoading$ | async;
   @let solutionCount = solutionCount$ | async;
 
-  <div class="remaining" [class.remaining--recalculating]="solutionsLoading">
+  <div
+    class="remaining"
+    [class.remaining--recalculating]="solutionsLoading || countLoading"
+  >
+    @if (runId$ | async) {
+      <div class="analysis-controls">
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="countPlans()"
+          [disabled]="
+            (loading$ | async) ||
+            countLoading ||
+            (solutionCount !== null && solutionCount !== undefined)
+          "
+        >
+          {{ countLoading ? "Counting…" : "Count plans" }}
+        </button>
+        <button
+          mat-stroked-button
+          type="button"
+          (click)="calculateWhatIfCounts()"
+          [disabled]="(loading$ | async) || reductionLoading"
+        >
+          {{ reductionLoading ? "Calculating…" : "Calculate choice impact" }}
+        </button>
+        <small>These calculations are optional.</small>
+      </div>
+    }
+
     @if (solutionCount !== null && solutionCount !== undefined) {
       <p class="remaining-plans">Remaining plans: {{ solutionCount }}</p>
     }
 
-    <!-- Remaining plans, listed one page at a time -->
+    @if (countLoading) {
+      <div class="recalculating">
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <span class="recalculating__label">Counting all remaining plans …</span>
+      </div>
+    } @else if (solutionsLoading) {
+      <div class="recalculating">
+        <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        <span class="recalculating__label">Loading plans …</span>
+      </div>
+    }
+
     @if (solutions$ | async; as solutions) {
       @if (solutions.length > 0) {
         <p class="solutions__summary">
@@ -59,10 +123,14 @@
         <div class="solutions">
           @for (solution of solutions; track solution.label; let i = $index) {
             <div class="solution">
-              <h5 class="solution__title">{{ solution.label || 'Plan ' + (i + 1) }}</h5>
+              <h5 class="solution__title">
+                {{ solution.label || "Plan " + (i + 1) }}
+              </h5>
               <ol class="solution__steps">
                 @for (step of planSteps(solution.facets); track step.id) {
-                  <li class="solution__step">t{{ step.timestep }}: {{ step.label }}</li>
+                  <li class="solution__step">
+                    t{{ step.timestep }}: {{ step.label }}
+                  </li>
                 }
               </ol>
             </div>
@@ -84,35 +152,25 @@
     }
   </div>
 
-  <!-- Filter facets by label -->
   @if (runId$ | async) {
     <mat-form-field class="facet-search" subscriptSizing="dynamic">
       <mat-label>Filter facets</mat-label>
       <mat-select [formControl]="filterControl">
-        <mat-option value="">All actions</mat-option>
-        @for (action of filterOptions$ | async; track action) {
-          <mat-option [value]="action">{{ action }}</mat-option>
-        }
-      </mat-select>
-    </mat-form-field>
-
-    <mat-form-field class="facet-search" subscriptSizing="dynamic">
-      <mat-label>Filter timestep</mat-label>
-      <mat-select [formControl]="timestepControl">
-        <mat-option value="">All timesteps</mat-option>
-        @for (option of timestepOptions$ | async; track option.value) {
-          <mat-option [value]="option.value">{{ option.label }}</mat-option>
+        <mat-option value="">All facets</mat-option>
+        @for (label of filterOptions$ | async; track label) {
+          <mat-option [value]="label">{{ label }}</mat-option>
         }
       </mat-select>
     </mat-form-field>
   }
 
-  <!-- Submit bar: staged selections are applied only on submit -->
   @if (runId$ | async) {
     <div class="submit-bar">
       <span class="submit-bar__info">
         @if (pendingCount() > 0) {
-          {{ pendingCount() }} pending change{{ pendingCount() === 1 ? '' : 's' }}
+          {{ pendingCount() }} pending change{{
+            pendingCount() === 1 ? "" : "s"
+          }}
         } @else {
           No pending changes
         }
@@ -138,7 +196,6 @@
     </div>
   }
 
-  <!-- Implied facets ('|= %'): landmarks forced by the committed decisions -->
   @if (runId$ | async) {
     <div class="implied">
       <div class="implied__bar">
@@ -151,11 +208,13 @@
           Show implied facets
         </button>
         @if (impliedFacetsShown$ | async) {
-          <button mat-button type="button" (click)="hideImpliedFacets()">Hide</button>
+          <button mat-button type="button" (click)="hideImpliedFacets()">
+            Hide
+          </button>
         }
         <span class="implied__hint">
-          Additional facets forced by your committed decisions – true in every remaining
-          plan (your own picks are not repeated here).
+          Additional facets forced by your committed decisions – true in every
+          remaining plan (your own picks are not repeated here).
         </span>
       </div>
 
@@ -169,12 +228,17 @@
                 @for (facet of implied; track facet.id) {
                   <li class="implied__item">
                     <span class="facet__label">{{ facet.label }}</span>
-                    <span class="facet__timestep">{{ timestepLabel(facet) }}</span>
+                    <span class="facet__timestep">{{
+                      timestepLabel(facet)
+                    }}</span>
                   </li>
                 }
               </ul>
             } @else {
-              <p class="status">No additional facets are forced yet – commit more decisions to narrow the plans.</p>
+              <p class="status">
+                No additional facets are forced yet – commit more decisions to
+                narrow the plans.
+              </p>
             }
           }
         }
@@ -182,18 +246,7 @@
     </div>
   }
 
-  <!-- Recalculation indicator, kept just above the columns and sticky so it
-       stays visible while working through the open decisions. -->
-  @if (solutionsLoading) {
-    <div class="recalculating recalculating--sticky">
-      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-      <span class="recalculating__label">Recalculating remaining plans …</span>
-    </div>
-  }
-
-  <!-- Two columns: open choices (left) and made decisions (right) -->
   <div class="columns">
-    <!-- Left column: open decisions, split into state (holds) and actions (occurs) -->
     <div class="column">
       <h4 class="column__title">Open decisions</h4>
       @if (openFacetGroups$ | async; as groups) {
@@ -204,20 +257,28 @@
                 <mat-expansion-panel-header>
                   <mat-panel-title class="facet-group__title">
                     {{ group.title }}
-                    <span class="facet-group__count">{{ group.facets.length }}</span>
+                    <span class="facet-group__count">{{
+                      group.facets.length
+                    }}</span>
                   </mat-panel-title>
                 </mat-expansion-panel-header>
 
                 @if (group.facets.length > 0) {
                   <ul class="facet-list">
                     @for (facet of group.facets; track facet.id) {
-                      <li class="facet" [class.facet--pending]="isPending(facet)">
+                      <li
+                        class="facet"
+                        [attr.data-facet-id]="facet.id"
+                        [class.facet--pending]="isPending(facet)"
+                      >
                         <div class="facet__head">
                           <span class="facet__label">{{ facet.label }}</span>
                           @if (isPending(facet)) {
                             <span class="facet__pending">pending</span>
                           }
-                          <span class="facet__timestep">{{ timestepLabel(facet) }}</span>
+                          <span class="facet__timestep">{{
+                            timestepLabel(facet)
+                          }}</span>
                         </div>
 
                         <mat-button-toggle-group
@@ -225,14 +286,21 @@
                           (change)="onSelectionChange(facet, $event.value)"
                           [disabled]="(loading$ | async) ?? false"
                         >
-                          <mat-button-toggle [value]="SelectionState.NEGATIVE">Forbid</mat-button-toggle>
-                          <mat-button-toggle [value]="SelectionState.NEUTRAL">Neutral</mat-button-toggle>
-                          <mat-button-toggle [value]="SelectionState.POSITIVE">Enforce</mat-button-toggle>
+                          <mat-button-toggle [value]="SelectionState.NEGATIVE"
+                            >Forbid</mat-button-toggle
+                          >
+                          <mat-button-toggle [value]="SelectionState.NEUTRAL"
+                            >Neutral</mat-button-toggle
+                          >
+                          <mat-button-toggle [value]="SelectionState.POSITIVE"
+                            >Enforce</mat-button-toggle
+                          >
                         </mat-button-toggle-group>
 
                         @if (whatIfCounts(facet); as counts) {
                           <span class="facet__remaining">
-                            Enforce → {{ counts.enforce }} · Forbid → {{ counts.forbid }} plans
+                            Enforce → {{ counts.enforce }} · Forbid →
+                            {{ counts.forbid }} plans
                           </span>
                         }
                       </li>
@@ -244,12 +312,13 @@
               </mat-expansion-panel>
             }
           </mat-accordion>
-        } @else if (hasActiveFilter()) {
+        } @else if (filterControl.value) {
           <p class="status">No open decisions match the filter.</p>
         } @else if (runId$ | async) {
           <p class="status">
-            This plan space is empty – no plan matches the chosen horizon and encoding.
-            Try a larger horizon, or the "bounded" encoding to allow shorter plans.
+            This plan space is empty – no plan matches the chosen horizon and
+            encoding. Try a larger horizon, or the "bounded" encoding to allow
+            shorter plans.
           </p>
         } @else {
           <p class="status">No facets yet – start a session.</p>
@@ -257,7 +326,6 @@
       }
     </div>
 
-    <!-- Right column: made decisions (committed + staged picks) -->
     <div class="column">
       <h4 class="column__title">Made decisions</h4>
       @if (madeDecisions$ | async; as rows) {
@@ -273,16 +341,26 @@
                   @if (row.pending) {
                     <span class="facet__pending">{{ row.pendingLabel }}</span>
                   }
-                  <span class="facet__timestep">{{ timestepLabel(row.facet) }}</span>
+                  <span class="facet__timestep">{{
+                    timestepLabel(row.facet)
+                  }}</span>
                 </div>
 
                 <div class="facet__decision-row">
                   <span
                     class="facet__badge"
-                    [class.facet__badge--keep]="row.displayState === SelectionState.POSITIVE"
-                    [class.facet__badge--forbid]="row.displayState === SelectionState.NEGATIVE"
+                    [class.facet__badge--keep]="
+                      row.displayState === SelectionState.POSITIVE
+                    "
+                    [class.facet__badge--forbid]="
+                      row.displayState === SelectionState.NEGATIVE
+                    "
                   >
-                    {{ row.displayState === SelectionState.POSITIVE ? 'Enforce' : 'Forbid' }}
+                    {{
+                      row.displayState === SelectionState.POSITIVE
+                        ? "Enforce"
+                        : "Forbid"
+                    }}
                   </span>
                   <button
                     mat-stroked-button
@@ -290,13 +368,13 @@
                     (click)="toggleDecision(row)"
                     [disabled]="(loading$ | async) ?? false"
                   >
-                    {{ row.pending ? 'Cancel' : 'Undo' }}
+                    {{ row.pending ? "Cancel" : "Undo" }}
                   </button>
                 </div>
               </li>
             }
           </ul>
-        } @else if (hasActiveFilter()) {
+        } @else if (filterControl.value) {
           <p class="status">No made decisions match the filter.</p>
         } @else {
           <p class="status">No decisions made yet.</p>

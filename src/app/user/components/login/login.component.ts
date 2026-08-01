@@ -1,11 +1,9 @@
-import { Component, inject, OnInit } from "@angular/core";
+import { Component, inject } from "@angular/core";
 import { FormsModule, ReactiveFormsModule, UntypedFormControl, UntypedFormGroup, Validators } from "@angular/forms";
-import { ActivatedRoute, Router } from "@angular/router";
 import { MatDialogRef } from "@angular/material/dialog";
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatIconModule } from "@angular/material/icon";
 import { MatFormFieldModule, MatLabel } from "@angular/material/form-field";
-import { MatCardModule } from "@angular/material/card";
 import { Store } from "@ngrx/store";
 import { login } from "src/app/user/state/user.actions";
 import { selectLoggedIn, selectUserError } from "src/app/user/state/user.selector";
@@ -14,6 +12,7 @@ import { MatInputModule } from "@angular/material/input";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { filter } from "rxjs";
 import { DialogModule } from "src/app/shared/components/dialog/dialog.module";
+import { AsyncPipe } from "@angular/common";
 
 @Component({
     selector: "app-login",
@@ -26,6 +25,7 @@ import { DialogModule } from "src/app/shared/components/dialog/dialog.module";
         ReactiveFormsModule,
         FormsModule,
         MatButtonModule,
+        AsyncPipe,
     ],
     templateUrl: "./login.component.html",
     styleUrls: ["./login.component.scss"]
@@ -38,7 +38,7 @@ export class LoginComponent {
         Validators.minLength(5),
         Validators.maxLength(32),
       ]),
-    password: new UntypedFormControl([
+    password: new UntypedFormControl('', [
       Validators.required,
       Validators.minLength(8),
       Validators.maxLength(32),
@@ -64,7 +64,11 @@ export class LoginComponent {
   }
 
   onLogin(): void {
-    
+    if (this.loginForm.invalid) {
+      this.loginForm.markAllAsTouched();
+      return;
+    }
+
     const name = this.loginForm.controls.name.value;
     const password = this.loginForm.controls.password.value;
 

@@ -1,7 +1,7 @@
 import { createReducer, on } from "@ngrx/store";
 import { Loadable, LoadingState } from "src/app/shared/common/loadable.interface";
 import { User } from "../domain/user";
-import { loadTokenLocalStorageFailure, loadTokenLocalStorageSuccess, loadUser, loadUserSuccess, login, loginFailure, loginSuccess, logoutSuccess, registerUser, registerUserFailure, registerUserSuccess } from "./user.actions";
+import { loadTokenLocalStorageFailure, loadTokenLocalStorageSuccess, loadUser, loadUserFailure, loadUserSuccess, login, loginFailure, loginSuccess, logoutSuccess, registerUser, registerUserFailure, registerUserSuccess } from "./user.actions";
 
 export interface UserState {
     user: Loadable<User>;
@@ -33,6 +33,10 @@ export const userReducer = createReducer(
     on(loadUserSuccess, (state, {user}): UserState => ({
         ...state,
         user: {state: LoadingState.Done, data: user}
+    })),
+    on(loadUserFailure, (state): UserState => ({
+        ...state,
+        user: {state: LoadingState.Error, data: undefined}
     })),
     on(registerUser, (state): UserState => ({
         ...state,

@@ -1,5 +1,10 @@
 import { createReducer, on } from "@ngrx/store";
-import { PlanPilotFacet, PlanPilotSelectionState, PlanPilotSolution } from "../domain/planpilot";
+import {
+  PlanPilotFacet,
+  PlanPilotSelectionState,
+  PlanPilotSessionConfiguration,
+  PlanPilotSolution,
+} from "../domain/planpilot";
 import {
   clearPlanPilotImpliedFacets,
   queryPlanPilotImpliedFacets,
@@ -8,6 +13,8 @@ import {
   queryPlanPilotSolutionCount,
   queryPlanPilotSolutionCountFailure,
   queryPlanPilotSolutionCountSuccess,
+  queryPlanPilotSolutionReduction,
+  queryPlanPilotSolutionReductionFailure,
   queryPlanPilotSolutionReductionSuccess,
   queryPlanPilotSolutions,
   queryPlanPilotSolutionsFailure,
@@ -22,24 +29,24 @@ import {
 
 export interface PlanPilotState {
   runId: string | undefined;
+  replacedRunId: string | undefined;
   facets: PlanPilotFacet[];
   // The decisions the user has committed (selectionState !== neutral).
   // Tracked separately because the backend usually drops a decided facet
   // from the open-facet list once it is committed.
   decisions: PlanPilotFacet[];
-  // Number of solutions (plans) still consistent with the committed decisions.
   solutionCount: number | undefined;
-  // The remaining plans themselves, enumerated one page at a time.
   solutions: PlanPilotSolution[];
-  // How many plans the last enumeration asked for.
   solutionLimit: number;
-  // True while the count/enumeration queries are (re)calculating.
+  countLoading: boolean;
+  reductionLoading: boolean;
   solutionsLoading: boolean;
+  configuration: PlanPilotSessionConfiguration | undefined;
+  requestedHorizon: number | undefined;
+  minimumHorizon: number | null | undefined;
   // The implied facets ('|= %'): landmarks forced by the committed decisions.
   impliedFacets: PlanPilotFacet[];
-  // Whether the implied-facets panel has been requested/shown.
   impliedFacetsShown: boolean;
-  // True while the implied-facets query is running.
   impliedFacetsLoading: boolean;
   loading: boolean;
   error: unknown;
@@ -47,12 +54,18 @@ export interface PlanPilotState {
 
 export const initialPlanPilotState: PlanPilotState = {
   runId: undefined,
+  replacedRunId: undefined,
   facets: [],
   decisions: [],
   solutionCount: undefined,
   solutions: [],
   solutionLimit: 0,
+  countLoading: false,
+  reductionLoading: false,
   solutionsLoading: false,
+  configuration: undefined,
+  requestedHorizon: undefined,
+  minimumHorizon: undefined,
   impliedFacets: [],
   impliedFacetsShown: false,
   impliedFacetsLoading: false,
@@ -63,30 +76,36 @@ export const initialPlanPilotState: PlanPilotState = {
 export const planPilotReducer = createReducer(
   initialPlanPilotState,
 
-  // Trigger: HTTP starts → loading on, clear previous error
-  on(startPlanPilotSession, (state) => ({
-    ...state,
+  on(startPlanPilotSession, (state, { request }) => ({
+    ...initialPlanPilotState,
     loading: true,
-    error: undefined,
+    replacedRunId: state.runId,
+    requestedHorizon: request.horizon,
   })),
 
-  // Success: write the response into the state (fresh session -> no decisions yet)
   on(startPlanPilotSessionSuccess, (state, { response }) => ({
     ...state,
     loading: false,
     runId: response.runId,
+    replacedRunId: undefined,
     facets: response.facets,
     decisions: [],
-    solutionCount: undefined,
-    solutions: [],
+    solutionCount: response.solutionCount ?? undefined,
+    solutions: response.solution ? [response.solution] : [],
+    configuration: response.configuration,
+    minimumHorizon: response.minimumHorizon,
     impliedFacets: [],
     impliedFacetsShown: false,
   })),
 
-  // Failure: loading off, remember the error
   on(startPlanPilotSessionFailure, (state, { err }) => ({
     ...state,
     loading: false,
+    runId: undefined,
+    replacedRunId: undefined,
+    facets: [],
+    decisions: [],
+    solutions: [],
     error: err,
   })),
 
@@ -119,6 +138,9 @@ export const planPilotReducer = createReducer(
       runId: response.runId,
       facets: response.facets,
       decisions,
+      solutionCount: response.solutionCount ?? undefined,
+      solutions: response.solution ? [response.solution] : [],
+      solutionLimit: 0,
       impliedFacets: [],
       impliedFacetsShown: false,
     };
@@ -130,55 +152,74 @@ export const planPilotReducer = createReducer(
     error: err,
   })),
 
-  // Recalculation starts: the count/enumeration chain is triggered.
   on(queryPlanPilotSolutionCount, (state) => ({
     ...state,
-    solutionsLoading: true,
+    countLoading: true,
+    error: undefined,
   })),
 
-  // Counter refresh: store the number of remaining solutions.
   on(queryPlanPilotSolutionCountSuccess, (state, { count }) => ({
     ...state,
     solutionCount: count,
+    countLoading: false,
+  })),
+
+  on(queryPlanPilotSolutionCountFailure, (state, { err }) => ({
+    ...state,
+    countLoading: false,
+    error: err,
   })),
 
   // Merge the per-facet what-if plan counts ('#!!') into the stored facets:
   // remaining.solution.positive/negative = plans left when enforcing/forbidding.
+  on(queryPlanPilotSolutionReduction, (state) => ({
+    ...state,
+    reductionLoading: true,
+    error: undefined,
+  })),
+
   on(queryPlanPilotSolutionReductionSuccess, (state, { facets }) => {
     const countsById = new Map(facets.map((facet) => [facet.id, facet]));
     return {
       ...state,
+      reductionLoading: false,
       facets: state.facets.map((facet) => {
         const counts = countsById.get(facet.id);
         return counts
-          ? { ...facet, reduction: counts.reduction, remaining: counts.remaining }
+          ? {
+              ...facet,
+              reduction: counts.reduction,
+              remaining: counts.remaining,
+            }
           : facet;
       }),
     };
   }),
 
-  // A page of plans was requested (first page or "show more").
+  on(queryPlanPilotSolutionReductionFailure, (state, { err }) => ({
+    ...state,
+    reductionLoading: false,
+    error: err,
+  })),
+
   on(queryPlanPilotSolutions, (state, { limit }) => ({
     ...state,
     solutionLimit: limit,
     solutionsLoading: true,
   })),
 
-  // Store the enumerated remaining plans.
-  // This is the end of the chain, so the recalculation is done.
   on(queryPlanPilotSolutionsSuccess, (state, { solutions }) => ({
     ...state,
     solutions,
     solutionsLoading: false,
   })),
 
-  // Any query failure also ends the recalculation.
-  on(queryPlanPilotSolutionCountFailure, queryPlanPilotSolutionsFailure, (state) => ({
+  on(queryPlanPilotSolutionsFailure, (state, { err }) => ({
     ...state,
     solutionsLoading: false,
+    error: err,
   })),
 
-  // Implied facets ('|= %') requested: mark shown + loading.
   on(queryPlanPilotImpliedFacets, (state) => ({
     ...state,
     impliedFacetsShown: true,

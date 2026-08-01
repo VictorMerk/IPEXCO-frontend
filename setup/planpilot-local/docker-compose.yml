@@ -1,3 +1,5 @@
+name: ${IPEXCO_COMPOSE_PROJECT_NAME:-ipexco-planpilot-local}
+
 services:
   mongo:
     image: mongo:8.2
@@ -62,7 +64,7 @@ services:
     env_file:
       - ./env/planpilot.env
     environment:
-      API_KEY: ${PLANPILOT_API_KEY:-test}
+      API_KEY: ${PLANPILOT_API_KEY:-ipexco-demo-api-key}
     depends_on:
       planpilot-init:
         condition: service_completed_successfully

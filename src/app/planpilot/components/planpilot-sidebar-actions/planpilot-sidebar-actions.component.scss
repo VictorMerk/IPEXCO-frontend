@@ -290,7 +290,8 @@
 }
 
 .facet-result:hover,
-.facet-result.selected {
+.facet-result.selected,
+.facet-result.linked-hover {
   background: var(--mat-sys-surface-container-low);
 }
 
@@ -333,4 +334,13 @@
   margin: 0;
   color: var(--mat-sys-on-surface-variant);
   font-size: 0.8rem;
+}
+.impact-controls {
+  display: flex;
+  gap: var(--spacing-100);
+  align-items: center;
+}
+
+.operation-cancel {
+  color: var(--mat-sys-error);
 }
