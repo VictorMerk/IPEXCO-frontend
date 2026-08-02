@@ -24,6 +24,22 @@ describe('PlanPilotGraphComponent', () => {
     expect(style?.style?.['border-color']).toBe('#b91c1c');
   });
 
+  it('uses opaque, distinct comparison halos', () => {
+    const comparisonStyles = ['same', 'moved', 'only-a', 'only-b'].map(
+      (state) => PLANPILOT_GRAPH_STYLES.find(
+        (entry) => entry.selector === `node.comparison-${state}`,
+      ) as { style?: Record<string, unknown> } | undefined,
+    );
+    const colors = comparisonStyles.map(
+      (entry) => entry?.style?.['underlay-color'],
+    );
+
+    expect(new Set(colors).size).toBe(4);
+    comparisonStyles.forEach((entry) => {
+      expect(Number(entry?.style?.['underlay-opacity'])).toBeGreaterThan(0.7);
+    });
+  });
+
   it('renders a plan edge from the earlier action to the later action', () => {
     component.facets = [planFacet('action-1', 1), planFacet('action-2', 2)];
     component.connections = [{ sourceId: 'action-1', targetId: 'action-2', kind: 'plan' }];

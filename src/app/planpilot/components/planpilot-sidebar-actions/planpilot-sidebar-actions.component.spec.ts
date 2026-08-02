@@ -155,6 +155,54 @@ describe("PlanPilotSidebarActionsComponent", () => {
     expect(previewCount).toBe(1);
   });
 
+  it("shows impact cancellation where the preview was started", () => {
+    component.selectedAction = {
+      facet: {
+        id: "impact-running",
+        label: "stack a b",
+        detail: "",
+        timestep: 2,
+        action: "stack",
+        group: "Available",
+        selection: "neutral",
+        remainingSolutions: null,
+        remainingFacets: null,
+        solutionReduction: null,
+        facetReduction: null,
+        available: true,
+        tokens: ["stack", "a", "b"],
+      },
+      timestepLabel: "t2",
+      stateLabel: "Available",
+      displayedPlan: false,
+      required: false,
+      forbidden: false,
+      selected: true,
+      canRequire: true,
+      canForbid: true,
+      canClear: false,
+      canPreviewImpact: true,
+      clearHint: "No constraint",
+    };
+    component.impactLoading = true;
+    component.canCancelOperation = true;
+    component.isBusy = true;
+    let cancellations = 0;
+    component.operationCancel.subscribe(() => {
+      cancellations += 1;
+    });
+    fixture.detectChanges();
+
+    const cancel = fixture.nativeElement.querySelector(
+      ".impact-controls .operation-cancel",
+    ) as HTMLButtonElement;
+    expect(cancel).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain("Calculating");
+    cancel.click();
+
+    expect(cancellations).toBe(1);
+  });
+
   it("shows typed Require and Forbid plan counts as a hypothetical preview", () => {
     component.impactCalculated = true;
     component.selectedAction = {

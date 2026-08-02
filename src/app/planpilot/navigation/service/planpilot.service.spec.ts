@@ -1,17 +1,17 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient } from "@angular/common/http";
 import {
   HttpTestingController,
   provideHttpClientTesting,
-} from '@angular/common/http/testing';
-import { TestBed } from '@angular/core/testing';
+} from "@angular/common/http/testing";
+import { TestBed } from "@angular/core/testing";
 import {
   PlanPilotEncoding,
   PlanPilotQueryType,
   PlanPilotSelectionState,
-} from '../domain/planpilot';
-import { PlanPilotService } from './planpilot.service';
+} from "../domain/planpilot";
+import { PlanPilotService } from "./planpilot.service";
 
-describe('PlanPilot navigation service', () => {
+describe("PlanPilot navigation service", () => {
   let service: PlanPilotService;
   let http: HttpTestingController;
 
@@ -29,77 +29,89 @@ describe('PlanPilot navigation service', () => {
 
   afterEach(() => http.verify());
 
-  it('requests state facets when it starts its own view', () => {
-    service.startSession$({
-      projectId: 'project-1',
-      horizon: 6,
-      encoding: PlanPilotEncoding.BOUNDED,
-      abstractTimeSteps: false,
-      stateFacets: true,
-    }).subscribe();
+  it("requests state facets when it starts its own view", () => {
+    let effectiveHorizon = 0;
+    service
+      .startSession$({
+        projectId: "project-1",
+        horizon: 6,
+        encoding: PlanPilotEncoding.BOUNDED,
+        abstractTimeSteps: false,
+        stateFacets: true,
+      })
+      .subscribe((response) => {
+        effectiveHorizon = response.configuration.horizon;
+        expect(response.minimumHorizon).toBe(8);
+      });
 
     const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/planpilot/sessions'),
+      candidate.url.endsWith("/planpilot/sessions"),
     );
     expect(request.request.body.stateFacets).toBeTrue();
     request.flush({
-      runId: 'run-1',
-      externalSessionId: 'session-1',
-      status: 'READY',
+      runId: "run-1",
+      externalSessionId: "session-1",
+      status: "READY",
       configuration: {
-        horizon: 6,
-        encoding: 'bounded',
+        horizon: 8,
+        encoding: "bounded",
         abstractTimeSteps: false,
         stateFacets: true,
       },
+      minimumHorizon: 8,
       facets: [],
     });
+    expect(effectiveHorizon).toBe(8);
   });
 
-  it('can request the prefix needed by the plan list', () => {
-    service.query$('run-1', {
-      type: PlanPilotQueryType.SOLUTION,
-      solutionNumber: 25,
-      solutionMode: 'prefix',
-    }).subscribe();
+  it("can request the prefix needed by the plan list", () => {
+    service
+      .query$("run-1", {
+        type: PlanPilotQueryType.SOLUTION,
+        solutionNumber: 25,
+        solutionMode: "prefix",
+      })
+      .subscribe();
 
     const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/planpilot/sessions/run-1/query'),
+      candidate.url.endsWith("/planpilot/sessions/run-1/query"),
     );
     expect(request.request.body).toEqual({
-      type: 'solution',
+      type: "solution",
       solutionNumber: 25,
-      solutionMode: 'prefix',
+      solutionMode: "prefix",
     });
     request.flush({
-      runId: 'run-1',
-      result: { type: 'solution', solutions: [] },
+      runId: "run-1",
+      result: { type: "solution", solutions: [] },
     });
   });
 
-  it('applies a staged batch in one request', () => {
-    const selections = [{
-      facetId: 'holds-clear-a-t0',
-      selectionState: PlanPilotSelectionState.POSITIVE,
-      previousSelectionState: PlanPilotSelectionState.NEUTRAL,
-    }];
+  it("applies a staged batch in one request", () => {
+    const selections = [
+      {
+        facetId: "holds-clear-a-t0",
+        selectionState: PlanPilotSelectionState.POSITIVE,
+        previousSelectionState: PlanPilotSelectionState.NEUTRAL,
+      },
+    ];
 
-    service.applyFacets$('run-1', selections).subscribe();
+    service.applyFacets$("run-1", selections).subscribe();
 
     const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/planpilot/sessions/run-1/facets/apply'),
+      candidate.url.endsWith("/planpilot/sessions/run-1/facets/apply"),
     );
     expect(request.request.body).toEqual({ selections });
-    request.flush({ runId: 'run-1', facets: [] });
+    request.flush({ runId: "run-1", facets: [] });
   });
 
-  it('can stop the navigation session', () => {
-    service.stopSession$('run-1').subscribe();
+  it("can stop the navigation session", () => {
+    service.stopSession$("run-1").subscribe();
 
     const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/planpilot/sessions/run-1'),
+      candidate.url.endsWith("/planpilot/sessions/run-1"),
     );
-    expect(request.request.method).toBe('DELETE');
+    expect(request.request.method).toBe("DELETE");
     request.flush(null);
   });
 });

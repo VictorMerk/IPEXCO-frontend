@@ -46,13 +46,9 @@ describe("PlanPilotSidebarPlanComponent", () => {
     expect(filtered).toEqual([2]);
   });
 
-  it("keeps plan preparation and exact counting with the plan-space settings", () => {
+  it("keeps exact counting with the plan-space settings", () => {
     component.knownPlanLowerBound = 4;
-    let prepared = 0;
     let countRequests = 0;
-    component.plansPrepare.subscribe((value) => {
-      prepared = value;
-    });
     component.solutionCountLoad.subscribe(() => {
       countRequests += 1;
     });
@@ -63,21 +59,35 @@ describe("PlanPilotSidebarPlanComponent", () => {
     ) as HTMLElement;
     expect(calculation.textContent).toContain("4+ found");
     expect(calculation.textContent).toContain("Count all");
-
-    const input = calculation.querySelector(
-      "#planpilot-prepare-count",
-    ) as HTMLInputElement;
-    input.value = "35";
-    input
-      .closest("form")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    expect(prepared).toBe(35);
+    expect(calculation.textContent).toContain(
+      "Count plans without loading them",
+    );
 
     const countButton = Array.from(calculation.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("Count all"),
     );
     (countButton as HTMLButtonElement).click();
     expect(countRequests).toBe(1);
+  });
+
+  it("lets the user change the timeout for longer analyses", () => {
+    component.analysisTimeoutSeconds = 45;
+    component.maxAnalysisTimeoutSeconds = 240;
+    let changed: Event | undefined;
+    component.analysisTimeoutChange.subscribe((event) => {
+      changed = event;
+    });
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector(
+      ".analysis-timeout input",
+    ) as HTMLInputElement;
+    expect(input.value).toBe("45");
+    expect(input.max).toBe("240");
+
+    input.value = "90";
+    input.dispatchEvent(new Event("change"));
+    expect((changed?.target as HTMLInputElement).value).toBe("90");
   });
 
   it("shows flexible facets separately from the concrete displayed plan", () => {
@@ -111,46 +121,35 @@ describe("PlanPilotSidebarPlanComponent", () => {
     );
   });
 
-  it("offers to prepare every plan after the exact count is known", () => {
+  it("shows the exact count without a second preparation action", () => {
     component.solutionCountKnown = true;
     component.solutionCount = 60;
-    let prepared = 0;
-    component.plansPrepare.subscribe((value) => {
-      prepared = value;
-    });
     fixture.detectChanges();
 
     const calculation = fixture.nativeElement.querySelector(
       '[data-testid="planpilot-plan-calculation"]',
     ) as HTMLElement;
     expect(calculation.textContent).toContain("60 plans in this space");
-    const prepareAll = Array.from(calculation.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Prepare all"),
-    );
-    (prepareAll as HTMLButtonElement).click();
-
-    expect(prepared).toBe(60);
+    expect(calculation.textContent).not.toContain("Prepare");
+    expect(calculation.querySelector("button")).toBeNull();
   });
 
-  it("keeps the suggested preparation count within a small exact plan space", () => {
-    component.solutionCountKnown = true;
-    component.solutionCount = 12;
-    let prepared = 0;
-    component.plansPrepare.subscribe((value) => {
-      prepared = value;
+  it("keeps cancellation beside a running exact count", () => {
+    component.solutionCountLoading = true;
+    component.canCancelOperation = true;
+    component.isBusy = true;
+    let cancellations = 0;
+    component.operationCancel.subscribe(() => {
+      cancellations += 1;
     });
     fixture.detectChanges();
 
-    const input = fixture.nativeElement.querySelector(
-      "#planpilot-prepare-count",
-    ) as HTMLInputElement;
-    expect(input.value).toBe("12");
-    expect(input.max).toBe("12");
-    expect(input.validity.valid).toBeTrue();
+    const cancel = fixture.nativeElement.querySelector(
+      ".count-actions .operation-cancel",
+    ) as HTMLButtonElement;
+    expect(cancel).not.toBeNull();
+    cancel.click();
 
-    input
-      .closest("form")
-      ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    expect(prepared).toBe(12);
+    expect(cancellations).toBe(1);
   });
 });

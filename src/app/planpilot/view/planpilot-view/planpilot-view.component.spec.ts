@@ -21,7 +21,9 @@ describe("PlanPilotViewComponent selection workflow", () => {
   beforeEach(() => {
     service = jasmine.createSpyObj<PlanPilotService>("PlanPilotService", [
       "applyFacets$",
+      "getCapabilities$",
       "listFacets$",
+      "listSessions$",
       "query$",
       "selectionImpact$",
       "revalidateSession$",
@@ -29,6 +31,23 @@ describe("PlanPilotViewComponent selection workflow", () => {
       "stopSession$",
       "stopSessionOnUnload",
     ]);
+    service.getCapabilities$.and.returnValue(
+      of({
+        serviceId: "service-1",
+        serviceName: "PlanPilot",
+        apiVersion: "1",
+        maxHorizon: 100,
+        maxActiveSessions: 4,
+        maxConcurrentCreations: 1,
+        sessionTtlSeconds: 3600,
+        maxCachedSolutions: 100,
+        encodings: ["exact", "bounded"],
+        supportsAbstractTimeSteps: true,
+        supportsStateFacets: true,
+        supportsAsyncJobs: false,
+      }),
+    );
+    service.listSessions$.and.returnValue(of({ sessions: [] }));
     service.listFacets$.and.returnValue(
       of({
         runId: "run-1",
@@ -1074,7 +1093,7 @@ describe("PlanPilotViewComponent selection workflow", () => {
 
     component.showSolution(2);
 
-    expect(service.query$).toHaveBeenCalledWith("run-1", "solution", 2);
+    expect(service.query$).toHaveBeenCalledWith("run-1", "solution", 2, 30);
     expect(component.currentSolutionNumber).toBe(2);
     expect(component.representativeSolutionLabel).toBe("solution 2");
     expect(component.representativeSolution.map((item) => item.label)).toEqual([
@@ -1295,6 +1314,58 @@ describe("PlanPilotViewComponent selection workflow", () => {
     expect(component.backendError).toBeUndefined();
   });
 
+  it("makes an asynchronous count cancellable as soon as it starts", () => {
+    component.capabilities = {
+      serviceId: "service-1",
+      serviceName: "PlanPilot",
+      apiVersion: "1",
+      maxHorizon: 100,
+      maxActiveSessions: 4,
+      maxConcurrentCreations: 1,
+      sessionTtlSeconds: 3600,
+      maxCachedSolutions: 100,
+      encodings: ["exact", "bounded"],
+      supportsAbstractTimeSteps: true,
+      supportsStateFacets: true,
+      supportsAsyncJobs: true,
+      asyncJobTypes: ["solution", "solutionCount", "selectionImpact"],
+    };
+    const queued = {
+      runId: "run-1",
+      jobId: "job-count",
+      expiresAt: "2026-07-26T12:00:00Z",
+      type: "solutionCount" as const,
+      status: "queued" as const,
+      selectionRevision: 0,
+      createdAt: "2026-07-26T11:00:00Z",
+    };
+    const run = jasmine.createSpy("run").and.returnValue(of(queued));
+    const cancel = jasmine
+      .createSpy("cancel")
+      .and.returnValue(of({ ...queued, status: "cancelled" as const }));
+    (
+      component as unknown as {
+        queryJobs: { run$: typeof run; cancel$: typeof cancel };
+      }
+    ).queryJobs = { run$: run, cancel$: cancel };
+
+    component.loadSolutionCount();
+
+    expect(run).toHaveBeenCalledOnceWith("run-1", {
+      type: "solutionCount",
+      expectedSelectionRevision: 0,
+      timeoutSeconds: 30,
+    });
+    expect(component.solutionCountLoading).toBeTrue();
+    expect(component.canCancelActiveQueryJob).toBeTrue();
+
+    component.cancelActiveQueryJob();
+
+    expect(cancel).toHaveBeenCalledOnceWith("run-1", "job-count");
+    expect(component.solutionCountLoading).toBeFalse();
+    expect(component.lastSelectionMessage).toBe("Operation cancelled.");
+  });
+
   it("explains that a count timeout does not break the graph", () => {
     service.query$.and.returnValue(
       throwError(() => ({
@@ -1306,6 +1377,52 @@ describe("PlanPilotViewComponent selection workflow", () => {
     component.loadSolutionCount();
 
     expect(component.solutionCountKnown).toBeFalse();
+    expect(component.solutionCountError).toContain(
+      "You can still browse plans",
+    );
+  });
+
+  it("explains a timeout reported by an asynchronous count job", () => {
+    component.capabilities = {
+      serviceId: "service-1",
+      serviceName: "PlanPilot",
+      apiVersion: "1",
+      maxHorizon: 100,
+      maxActiveSessions: 4,
+      maxConcurrentCreations: 1,
+      sessionTtlSeconds: 3600,
+      maxCachedSolutions: 100,
+      encodings: ["exact", "bounded"],
+      supportsAbstractTimeSteps: true,
+      supportsStateFacets: true,
+      supportsAsyncJobs: true,
+      asyncJobTypes: ["solution", "solutionCount", "selectionImpact"],
+    };
+    const run = jasmine.createSpy("run").and.returnValue(
+      of({
+        runId: "run-1",
+        jobId: "job-count",
+        expiresAt: "2026-07-26T12:00:00Z",
+        type: "solutionCount" as const,
+        status: "failed" as const,
+        selectionRevision: 0,
+        createdAt: "2026-07-26T11:00:00Z",
+        completedAt: "2026-07-26T11:00:30Z",
+        error: {
+          code: "PLAN_SPACE_TOO_LARGE",
+          message: "slow query",
+        },
+      }),
+    );
+    (
+      component as unknown as {
+        queryJobs: { run$: typeof run };
+      }
+    ).queryJobs = { run$: run };
+
+    component.loadSolutionCount();
+
+    expect(component.solutionCountLoading).toBeFalse();
     expect(component.solutionCountError).toContain(
       "You can still browse plans",
     );
@@ -1330,7 +1447,12 @@ describe("PlanPilotViewComponent selection workflow", () => {
 
     component.loadSolutionCount();
 
-    expect(service.query$).toHaveBeenCalledOnceWith("run-1", "solutionCount");
+    expect(service.query$).toHaveBeenCalledOnceWith(
+      "run-1",
+      "solutionCount",
+      undefined,
+      30,
+    );
     expect(component.solutionCountKnown).toBeTrue();
     expect(component.solutionCount).toBe(60);
     expect(component.representativeSolution[0].remainingSolutions).toBe(60);
@@ -1736,6 +1858,7 @@ describe("PlanPilotViewComponent selection workflow", () => {
     expect(service.selectionImpact$).toHaveBeenCalledOnceWith(
       "run-1",
       "include-me",
+      30,
     );
     expect(component.solutionCount).toBe(60);
     expect(component.inspectedFacetImpact?.require).toEqual({
@@ -1790,8 +1913,8 @@ describe("PlanPilotViewComponent selection workflow", () => {
     component.calculateImpact();
 
     expect(service.selectionImpact$.calls.allArgs()).toEqual([
-      ["run-1", "include-me"],
-      ["run-1", "exclude-me"],
+      ["run-1", "include-me", 30],
+      ["run-1", "exclude-me", 30],
     ]);
     expect(component.inspectedFacetImpact).toBeDefined();
   });
@@ -1905,6 +2028,7 @@ describe("PlanPilotViewComponent selection workflow", () => {
     expect(service.selectionImpact$).toHaveBeenCalledOnceWith(
       "run-1",
       "include-me",
+      30,
     );
     response.next({
       runId: "run-1",
@@ -2200,7 +2324,12 @@ describe("PlanPilotViewComponent selection workflow", () => {
       { target: { value: "21" } } as unknown as Event,
       "b",
     );
-    expect(service.query$).toHaveBeenCalledOnceWith("run-1", "solution", 21);
+    expect(service.query$).toHaveBeenCalledOnceWith(
+      "run-1",
+      "solution",
+      21,
+      30,
+    );
     expect(component.currentSolutionNumber).toBe(21);
     expect(component.comparisonPlanB).toBe(21);
   });
@@ -2462,20 +2591,127 @@ describe("PlanPilotViewComponent selection workflow", () => {
     expect(component.comparison).toBeDefined();
   });
 
-  it("prepares a requested solution prefix without replacing the displayed plan", () => {
+  it("loads the next plan batch without replacing the displayed plan", () => {
     component.representativeSolution = [facet("initial")];
     component.currentSolutionNumber = 0;
     service.query$.calls.reset();
 
-    component.preparePlansThrough(30);
+    component.loadNextPlanBatch();
 
-    expect(service.query$).toHaveBeenCalledOnceWith("run-1", "solution", 30);
-    expect(component.solutionCache[30].label).toBe("solution 1");
-    expect(component.knownPlanLowerBound).toBe(30);
+    expect(service.query$).toHaveBeenCalledTimes(20);
+    expect(component.solutionCache[1].label).toBe("solution 1");
+    expect(component.solutionCache[20].label).toBe("solution 1");
+    expect(component.loadedPlanCount).toBe(20);
+    expect(component.loadedPlanNumbers).toEqual([1, 2, 3, 4, 5]);
     expect(component.currentSolutionNumber).toBe(0);
     expect(component.representativeSolution[0].id).toBe("initial");
-    expect(component.lastSelectionMessage).toContain("Plans 1–30");
+    expect(component.lastSelectionMessage).toContain("Loaded plans 1–20");
     expect(component.planPreparationLoading).toBeFalse();
+  });
+
+  it("loads a plan batch as one cancellable job when supported", () => {
+    component.capabilities = {
+      serviceId: "service-1",
+      serviceName: "PlanPilot",
+      apiVersion: "1",
+      maxHorizon: 100,
+      maxActiveSessions: 4,
+      maxConcurrentCreations: 1,
+      sessionTtlSeconds: 3600,
+      maxCachedSolutions: 100,
+      encodings: ["exact", "bounded"],
+      supportsAbstractTimeSteps: true,
+      supportsStateFacets: true,
+      supportsAsyncJobs: true,
+      asyncJobTypes: ["solution", "solutionCount", "selectionImpact"],
+    };
+    const run = jasmine.createSpy("run").and.returnValue(
+      of({
+        runId: "run-1",
+        jobId: "job-prepare",
+        expiresAt: "2026-07-26T02:00:00Z",
+        type: "solution" as const,
+        status: "succeeded" as const,
+        selectionRevision: 0,
+        solutionStart: 1,
+        solutionNumber: 20,
+        createdAt: "2026-07-26T01:00:00Z",
+        result: {
+          type: "solution" as const,
+          solutions: Array.from({ length: 20 }, (_, index) => ({
+            label: `solution ${index + 1}`,
+            facets: [
+              {
+                id: `action-${index + 1}`,
+                label: "stack a b",
+                timestep: 3,
+                selectionState: "neutral" as const,
+              },
+            ],
+          })),
+        },
+      }),
+    );
+    (
+      component as unknown as {
+        queryJobs: { run$: typeof run };
+      }
+    ).queryJobs = { run$: run };
+
+    component.loadNextPlanBatch();
+
+    expect(run).toHaveBeenCalledOnceWith("run-1", {
+      type: "solution",
+      solutionStart: 1,
+      solutionNumber: 20,
+      expectedSelectionRevision: 0,
+      timeoutSeconds: 30,
+    });
+    expect(service.query$).not.toHaveBeenCalled();
+    expect(component.solutionCache[20].label).toBe("solution 20");
+    expect(component.loadedPlanNumbers).toEqual([1, 2, 3, 4, 5]);
+    expect(component.planPreparationLoading).toBeFalse();
+  });
+
+  it("ends plan loading immediately when its job is cancelled", () => {
+    component.planPreparationLoading = true;
+    component.activeOperationLabel = "Loading plans 21–40";
+    component.solutionCache[1] = {
+      label: "solution 1",
+      facets: [facet("loaded")],
+    };
+    component.activeQueryJob = {
+      runId: "run-1",
+      jobId: "job-batch",
+      expiresAt: "2026-07-26T02:00:00Z",
+      type: "solution",
+      status: "running",
+      selectionRevision: 0,
+      solutionStart: 21,
+      solutionNumber: 40,
+      createdAt: "2026-07-26T01:00:00Z",
+    };
+    const cancel = jasmine.createSpy("cancel").and.returnValue(
+      of({
+        ...component.activeQueryJob,
+        status: "cancelled" as const,
+      }),
+    );
+    (
+      component as unknown as {
+        queryJobs: { cancel$: typeof cancel };
+      }
+    ).queryJobs = { cancel$: cancel };
+
+    component.cancelActiveQueryJob();
+
+    expect(cancel).toHaveBeenCalledOnceWith("run-1", "job-batch");
+    expect(component.planPreparationLoading).toBeFalse();
+    expect(component.activeOperationLabel).toBe("");
+    expect(component.lastSelectionMessage).toContain(
+      "Plans that were already loaded remain available",
+    );
+    expect(component.solutionCache[1].label).toBe("solution 1");
   });
 
   it("clears preparation loading when the plan space changed remotely", () => {
@@ -2491,7 +2727,7 @@ describe("PlanPilotViewComponent selection workflow", () => {
       throwError(() => new Error("refresh failed")),
     );
 
-    component.preparePlansThrough(20);
+    component.loadNextPlanBatch();
 
     expect(component.planPreparationLoading).toBeFalse();
     expect(component.isBusy).toBeFalse();
