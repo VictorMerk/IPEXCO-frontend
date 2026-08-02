@@ -11,10 +11,10 @@ The dependencies are:
 - *Angular CLI* version 19 (https://angular.dev/tools/cli/setup-local)
 
 
-Before the first run install npm packages with:
+Before the first run, install the locked npm dependencies with:
 
 ```
-npm install
+npm ci
 ```
 
 ### Run
@@ -38,6 +38,27 @@ To run the back-end server natively we refer to the
 To set up the back-end server and the pre-build docker images see 
 [Docker](setup/README.md).
 
+### PlanPilot Setup
+
+The local Docker Compose setup starts the front-end, back-end, PlanPilot and the
+other required services:
+
+```bash
+cd setup/planpilot-local
+./start-ipexco.sh
+```
+
+Open `http://localhost:4200` after the services are ready. Setup instructions,
+Docker commands and service registration values are documented in the
+[local PlanPilot README](setup/planpilot-local/README.md).
+
+PlanPilot offers two project views:
+
+- **Facet Navigation** for selecting and reviewing planning facets
+- **Graph** for exploring plans, alternatives and dependencies
+
+The implementation and project responsibilities are summarized in
+[PLANPILOT_CONTRIBUTIONS.md](PLANPILOT_CONTRIBUTIONS.md).
 
 ## Platform Usage
 
@@ -56,7 +77,7 @@ perform the following steps:
 
 1. Go to the Menu in the top left corner and then to Specifications.
 1. Add a domain specification for your planning problem. Give it a name and 
-select as encoding `PPDL_CLASSIC`.
+select as encoding `PDDL_CLASSIC`.
 1. Edit the domain (*pencil* icon) to define goal templates. They are necessary 
 to define goals during the iterative planning process. In the file 
 `setup/example_data/blocksworld/templates.json` you can find some examples for 
@@ -70,17 +91,21 @@ instructions on how to define goal templates.
 How to obtain and run the docker images of the services is described in the 
 [README](https://github.com/r-eifler/IPEXCO-backend) of the back-end repository.
 
+The following `localhost` URLs apply when the back-end runs directly on the
+host. When using the PlanPilot Compose setup, use the service names from its
+[registration table](setup/planpilot-local/README.md#register-services-in-ipexco).
+
 1. Add a classical PDDL planner (e.g. [FD Planning Service](https://github.com/r-eifler/planner-service)) as a service. As type select `PLANNER` as 
-URL `http:localhost:3333` (If you have not changed any of the default settings),
+URL `http://localhost:3333` (If you have not changed any of the default settings),
 and as API Key what you defined in the *env* file of the planner docker container, 
-as encoding `PPDL_CLASSIC`.
+as encoding `PDDL_CLASSIC`.
 1. Add the classical property checker [Service](https://github.com/r-eifler/property_checker_service) as a service. As type select `PROPERTY_CHECKER` as 
-URL `http:localhost:3335` (If you have not changed any of the default settings),
+URL `http://localhost:3335` (If you have not changed any of the default settings),
 and as API Key what you defined in the *env* file of the property checker docker 
-container, as encoding `PPDL_CLASSIC`.
+container, as encoding `PDDL_CLASSIC`.
 1. Add the classical explainer [Service](https://github.com/r-eifler/explainer-service) 
 as a service. As type select `EXPLAINER` as 
-URL `http:localhost:3335` (If you have not changed any of the default settings),
+URL `http://localhost:3334` (If you have not changed any of the default settings),
 and as API Key what you defined in the *env* file of the explainer docker 
 container, as encoding `PDDL_CLASSIC`.
 
@@ -280,5 +305,3 @@ For more information on structured outputs, see [OpenAI's guide on structured ou
 These can be selected from the prompts defined in the "Specification" page.
 
 Examples prompts and output schemas for the Parents Afternoon domain are given in [setup/example_data/parentsafternoon/](setup/example_data/parentsafternoon/).
-
-

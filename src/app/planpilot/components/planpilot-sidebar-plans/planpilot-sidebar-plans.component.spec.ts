@@ -102,6 +102,66 @@ describe("PlanPilotSidebarPlansComponent", () => {
     expect(requested).toBe(23);
   });
 
+  it("loads plans in visible batches and keeps cancellation next to the job", () => {
+    component.displayedPlanActions = [
+      { id: "move-1", label: "move a", timestepLabel: "t1" },
+    ];
+    component.loadedPlanCount = 20;
+    component.nextPlanBatchStart = 21;
+    component.nextPlanBatchEnd = 40;
+    let batches = 0;
+    component.planBatchLoad.subscribe(() => {
+      batches += 1;
+    });
+    fixture.detectChanges();
+
+    const loader = fixture.nativeElement.querySelector(
+      '[data-testid="planpilot-plan-batch-loader"]',
+    ) as HTMLElement;
+    expect(loader.textContent).toContain("20 loaded");
+    const load = Array.from(loader.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Load next 20"),
+    ) as HTMLButtonElement;
+    load.click();
+    expect(batches).toBe(1);
+
+    component.planBatchLoading = true;
+    component.canCancelOperation = true;
+    component.isBusy = true;
+    let cancellations = 0;
+    component.operationCancel.subscribe(() => {
+      cancellations += 1;
+    });
+    fixture.detectChanges();
+
+    expect(loader.textContent).toContain("Loading 21–40");
+    const cancel = fixture.nativeElement.querySelector(
+      ".plan-batch-loader .operation-cancel",
+    ) as HTMLButtonElement;
+    expect(cancel.disabled).toBeFalse();
+    cancel.click();
+    expect(cancellations).toBe(1);
+  });
+
+  it("warns before a large direct jump", () => {
+    component.displayedPlanActions = [
+      { id: "move-1", label: "move a", timestepLabel: "t1" },
+    ];
+    component.knownPlanLowerBound = 20;
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector(
+      "#planpilot-plan-number",
+    ) as HTMLInputElement;
+    input.value = "80";
+    input.dispatchEvent(new Event("input"));
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector(".plan-jump-warning").textContent,
+    ).toContain("is not loaded");
+  });
+
   it("does not render plan-count errors in the plan browser", () => {
     component.displayedPlanActions = [
       { id: "move-1", label: "move a", timestepLabel: "t1" },
@@ -134,6 +194,31 @@ describe("PlanPilotSidebarPlansComponent", () => {
     expect(browser.querySelector(".plan-comparison").closest("details")).toBe(
       null,
     );
+  });
+
+  it("switches directly between compared plans", () => {
+    component.displayedPlanActions = [
+      { id: "move-1", label: "move a", timestepLabel: "t1" },
+    ];
+    component.comparisonPlanA = 3;
+    component.comparisonPlanB = 8;
+    component.comparison = {
+      same: [],
+      moved: [],
+      onlyA: [],
+      onlyB: [],
+    };
+    const shown: number[] = [];
+    component.comparisonPlanShow.subscribe((number) => shown.push(number));
+    fixture.detectChanges();
+
+    const buttons = fixture.nativeElement.querySelectorAll(
+      ".comparison-switch button",
+    );
+    buttons[0].click();
+    buttons[1].click();
+
+    expect(shown).toEqual([3, 8]);
   });
 
   it("marks selectable plan rows as clickable", () => {

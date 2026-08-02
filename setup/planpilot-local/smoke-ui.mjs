@@ -317,6 +317,8 @@ try {
     throw new Error("PlanPilot graph canvas was not rendered.");
   }
   result.initialSolutionCountKnown = result.solutionCountKnown === true;
+  result.analysisTimeout = await setAnalysisTimeout(cdp, 45);
+  assertEqual(result.analysisTimeout, 45, "analysis timeout");
   if (preparePlanCount !== undefined && !result.initialSolutionCountKnown) {
     result.planPreparation = await preparePlansInUi(cdp, preparePlanCount);
     result.directOpenWithoutCount = await openPlanWithoutCountInUi(
@@ -335,7 +337,7 @@ try {
     }
   }
   if (prepareAllPlans && result.solutionCountKnown) {
-    result.prepareAll = await prepareAllPlansInUi(cdp, result.solutionCount);
+    result.planBatch = await preparePlansInUi(cdp, result.solutionCount);
   }
   result.interfaceCopy = await assertInterfaceCopy(cdp);
   result.sidebarNavigation = await assertSidebarNavigation(cdp);
@@ -703,36 +705,63 @@ async function countPlansInUi(cdp) {
   return result;
 }
 
-async function preparePlansInUi(cdp, count) {
+async function setAnalysisTimeout(cdp, timeoutSeconds) {
   await showSidebarTab(cdp, "Plan");
-  const submitted = await cdp.call("Runtime.evaluate", {
+  const response = await cdp.call("Runtime.evaluate", {
     expression: `(() => {
-      const input = document.querySelector('#planpilot-prepare-count');
-      const form = input?.closest('form');
-      if (!input || !form || input.disabled) return false;
-      input.value = ${count};
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      form.requestSubmit();
-      return true;
+      const input = document.querySelector('.analysis-timeout input');
+      if (!input) return null;
+      const setter = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    ).set;
+    setter.call(input, ${timeoutSeconds});
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return Number(input.value);
     })()`,
     returnByValue: true,
   });
-  if (!submitted.result.value) {
-    throw new Error("The Plan tab did not allow plan preparation.");
+  return response.result.value;
+}
+
+async function preparePlansInUi(cdp, count) {
+  await showSidebarTab(cdp, "Plans");
+  let result;
+  while ((result?.loaded ?? 0) < count) {
+    const started = await waitForExpression(
+      cdp,
+      `(() => {
+        if (document.querySelector('.workbench-progress')) return null;
+        const loader = document.querySelector('[data-testid="planpilot-plan-batch-loader"]');
+        const button = [...(loader?.querySelectorAll('button') ?? [])]
+          .find((candidate) => candidate.textContent?.includes('Load next'));
+        const heading = document.querySelector('.plan-browser-heading strong')?.textContent?.trim() ?? '';
+        if (!button || button.disabled) return null;
+        button.click();
+        return { heading };
+      })()`,
+      180_000,
+    );
+    result = await waitForExpression(
+      cdp,
+      `(() => {
+        if (document.querySelector('.workbench-progress')) return null;
+        const loader = document.querySelector('[data-testid="planpilot-plan-batch-loader"]');
+        if (loader?.textContent?.includes('Loading')) return null;
+        const loadedText = loader?.querySelector('strong')?.textContent?.trim() ?? '';
+        const loaded = Number(loadedText.match(/^\\d+/)?.[0] ?? 0);
+        const message = document.querySelector('.inline-message:not(.error-message) span')?.textContent?.trim() ?? '';
+        const heading = document.querySelector('.plan-browser-heading strong')?.textContent?.trim() ?? '';
+        return loaded > 0 && message.includes('Loaded plans')
+          ? { loaded, message, heading }
+          : null;
+      })()`,
+      180_000,
+    );
+    if (result.heading !== started.heading) {
+      throw new Error("Loading a plan batch replaced the displayed plan.");
+    }
   }
-  const result = await waitForExpression(
-    cdp,
-    `(() => {
-      if (document.querySelector('.workbench-progress')) return null;
-      const message = document.querySelector('.inline-message:not(.error-message) span')?.textContent?.trim() ?? '';
-      const heading = document.querySelector('.plan-browser-heading strong')?.textContent?.trim() ?? '';
-      const summary = document.querySelector('.session-overview > span strong')?.textContent?.trim() ?? '';
-      return message.includes('Plans 1–${count} are ready')
-        ? { message, heading, summary }
-        : null;
-    })()`,
-    180_000,
-  );
   return result;
 }
 
@@ -779,39 +808,6 @@ async function openPlanWithoutCountInUi(cdp, solutionNumber) {
   return result;
 }
 
-async function prepareAllPlansInUi(cdp, solutionCount) {
-  await showSidebarTab(cdp, "Plan");
-  const started = await waitForExpression(
-    cdp,
-    `(() => {
-      if (document.querySelector('.workbench-progress')) return null;
-      const button = [...document.querySelectorAll('[data-testid="planpilot-plan-calculation"] .count-row button')]
-        .find((candidate) => candidate.textContent?.includes('Prepare all'));
-      const heading = document.querySelector('.plan-browser-heading strong')?.textContent?.trim() ?? '';
-      if (!button || button.disabled) return null;
-      button.click();
-      return { heading };
-    })()`,
-    180_000,
-  );
-  const finished = await waitForExpression(
-    cdp,
-    `(() => {
-      if (document.querySelector('.workbench-progress')) return null;
-      const message = document.querySelector('.inline-message:not(.error-message) span')?.textContent?.trim() ?? '';
-      const heading = document.querySelector('.plan-browser-heading strong')?.textContent?.trim() ?? '';
-      return message.includes('Plans 1–${solutionCount} are ready')
-        ? { message, heading }
-        : null;
-    })()`,
-    180_000,
-  );
-  if (finished.heading !== started.heading) {
-    throw new Error("Prepare all replaced the displayed plan.");
-  }
-  return finished;
-}
-
 async function assertAbstractTimeUi(cdp) {
   const selected = await cdp.call("Runtime.evaluate", {
     expression: `(() => {
@@ -837,7 +833,7 @@ async function assertAbstractTimeUi(cdp) {
   });
   if (
     timeline.result.value.description !==
-      "Action facets that apply to any timestep"
+    "Action facets that apply to any timestep"
   ) {
     throw new Error("The flexible timeline row has an unclear description.");
   }
@@ -936,7 +932,10 @@ async function openPlanPilotFromProject(
   })()`,
     30_000,
   );
-  if (!landing.hasNavigation || /choose a plan|iteration|propert/i.test(landing.text)) {
+  if (
+    !landing.hasNavigation ||
+    /choose a plan|iteration|propert/i.test(landing.text)
+  ) {
     throw new Error(
       `The PlanPilot page contains iterative-planning UI: ${JSON.stringify(landing.text)}`,
     );

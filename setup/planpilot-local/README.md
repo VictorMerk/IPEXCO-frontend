@@ -9,7 +9,9 @@ other planning services. It is intended for local development and demos.
 - Git
 - Bash (use a WSL shell on Windows)
 
-Docker Desktop must be running when using WSL.
+Docker Desktop must be running when using WSL. Clone the repositories inside
+the WSL filesystem, for example below `~/planpilot-workspace`, rather than below
+`/mnt/c`.
 
 ## Clone
 
@@ -70,16 +72,22 @@ The equivalent helper is:
 
 User and project data remain in `.runtime` after a normal stop.
 
+To stop the stack and remove all local users and projects:
+
+```bash
+./stop-ipexco.sh --delete-data
+```
+
 ## Register services in IPEXCO
 
 The backend runs inside Docker, so use the Compose service names instead of
 `localhost`:
 
-| Service | URL | API key |
-| --- | --- | --- |
-| PlanPilot | `http://planpilot:5000` | `ipexco-demo-api-key` |
-| Planner | `http://planner-fd:3333` | `ipexco-demo-api-key` |
-| Explainer | `http://explainer:3334` | `ipexco-demo-api-key` |
+| Service          | URL                            | API key               |
+| ---------------- | ------------------------------ | --------------------- |
+| PlanPilot        | `http://planpilot:5000`        | `ipexco-demo-api-key` |
+| Planner          | `http://planner-fd:3333`       | `ipexco-demo-api-key` |
+| Explainer        | `http://explainer:3334`        | `ipexco-demo-api-key` |
 | Property checker | `http://property-checker:3335` | `ipexco-demo-api-key` |
 
 PlanPilot health is available from the host at

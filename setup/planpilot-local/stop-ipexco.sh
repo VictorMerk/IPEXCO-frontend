@@ -7,14 +7,20 @@ COMPOSE_PROJECT_NAME="${IPEXCO_COMPOSE_PROJECT_NAME:-ipexco-planpilot-local}"
 
 usage() {
   cat <<'EOF'
-Usage: ./stop-ipexco.sh
+Usage: ./stop-ipexco.sh [--delete-data]
 
 Stops the local IPEXCO + PlanPilot stack created by start-ipexco.sh.
+
+  --delete-data  Also remove local users, projects and PlanPilot session data.
 EOF
 }
 
+DELETE_DATA=0
 for arg in "$@"; do
   case "$arg" in
+    --delete-data)
+      DELETE_DATA=1
+      ;;
     -h|--help)
       usage
       exit 0
@@ -52,6 +58,20 @@ IPEXCO_HOST_GID="${IPEXCO_HOST_GID:-$(id -g)}"
 export IPEXCO_HOST_UID IPEXCO_HOST_GID
 
 docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" --profile planpilot down --remove-orphans
+
+if (( DELETE_DATA )); then
+  RUNTIME_DIR="$SCRIPT_DIR/.runtime"
+  if [[ -d "$RUNTIME_DIR/ipexco-mongo" ]]; then
+    docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" \
+      run --rm --no-deps --user 0:0 --entrypoint /bin/sh mongo \
+      -c 'find /data/db -mindepth 1 -delete'
+  fi
+  rm -rf -- "$RUNTIME_DIR"
+  docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" \
+    --profile planpilot down --remove-orphans >/dev/null
+  echo "Local IPEXCO data removed."
+fi
+
 echo
 docker compose --project-name "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" --profile planpilot ps
 echo "IPEXCO stopped."
