@@ -75,12 +75,20 @@
     color: rgba(0, 0, 0, 0.6);
   }
 
-  &--sticky {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    padding: 0.5rem 0;
+  // Pinned to the viewport bottom while recalculating, so it stays visible no
+  // matter how far the plans list or an expanded facet group is scrolled.
+  // (The page scrolls inside <mat-sidenav-content>, where `position: sticky`
+  // is unreliable, so we use `fixed` against the viewport instead.)
+  &--floating {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    margin: 0;
+    padding: 0.6rem 1.25rem;
     background: var(--mat-sys-surface, #fff);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
   }
 }
 
