@@ -2,12 +2,12 @@
 
 ## Docker
 
-`backend_end_services` contains a docker compose and four environments. 
+`backend_and_services` contains a Docker Compose file and four environments.
 You must define the following parameters:
 
 `docker-compose.yml`:
 
-Replace `<absolute bath to local folder>` with absolute paths to two **different** 
+Replace `<absolute path to local folder>` with absolute paths to two **different**
 folders on your home system. These folders are used by the back-end and the 
 database to store the uploaded data.
 
@@ -18,10 +18,10 @@ database to store the uploaded data.
 - `SERVICE_KEY`: a random string that is used to authenticate any registered 
     services, e.g. planner 
 
-**Attention**: `SERVICE_KEY` in ``backend.env` and the service environments must match.
+**Attention**: `SERVICE_KEY` in `backend.env` and the service environments must match.
 
 
-`planner.env`/`explainer.env`/`property_checker.ts`:
+`planner.env`/`explainer.env`/`property_checker.env`:
 
 - `API_KEY`: a random string that is used to authenticate a request from the 
     back-end to a service
@@ -57,7 +57,4 @@ READMEs in the following repositories:
 To run all containers together run:
 
     docker compose up
-
-
-
 

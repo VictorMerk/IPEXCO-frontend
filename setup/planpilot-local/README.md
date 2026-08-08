@@ -83,12 +83,16 @@ To stop the stack and remove all local users and projects:
 The backend runs inside Docker, so use the Compose service names instead of
 `localhost`:
 
-| Service          | URL                            | API key               |
-| ---------------- | ------------------------------ | --------------------- |
-| PlanPilot        | `http://planpilot:5000`        | `ipexco-demo-api-key` |
-| Planner          | `http://planner-fd:3333`       | `ipexco-demo-api-key` |
-| Explainer        | `http://explainer:3334`        | `ipexco-demo-api-key` |
-| Property checker | `http://property-checker:3335` | `ipexco-demo-api-key` |
+| Service          | Type               | URL                            | API key               | Encoding       |
+| ---------------- | ------------------ | ------------------------------ | --------------------- | -------------- |
+| PlanPilot        | `PLANPILOT`        | `http://planpilot:5000`        | `ipexco-demo-api-key` | `PDDL_CLASSIC` |
+| Planner          | `PLANNER`          | `http://planner-fd:3333`       | `ipexco-demo-api-key` | `PDDL_CLASSIC` |
+| Explainer        | `EXPLAINER`        | `http://explainer:3334`        | `ipexco-demo-api-key` | `PDDL_CLASSIC` |
+| Property checker | `PROPERTY_CHECKER` | `http://property-checker:3335` | `ipexco-demo-api-key` | `PDDL_CLASSIC` |
+
+Register the services before creating a project so they are selected
+automatically. For an existing project, select newly registered services in
+the project settings.
 
 PlanPilot health is available from the host at
 `http://localhost:5000/api/health`.
@@ -96,9 +100,12 @@ PlanPilot health is available from the host at
 ## Common problems
 
 - Ports `3000`, `3333`, `3334`, `3335`, `4200`, `5000` and `27017` must be
-  free. `docker compose ls` shows other Compose stacks.
+  free. `docker compose ls` shows other Compose stacks and `docker ps` shows
+  standalone containers.
 - A login token from an older local database may be invalid. Clear
   `jwt-token` from the browser's local storage and register again.
+- After pulling changes, run `./start-ipexco.sh` with its default build mode.
+  `--no-build` keeps the previously built images.
 - PlanPilot contains an x86_64 FASB binary. Docker uses amd64 emulation on
   Apple Silicon, which is slower.
 
