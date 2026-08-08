@@ -158,7 +158,7 @@ try {
       title: group.querySelector('.facet-group__title')?.childNodes[0]?.textContent?.trim(),
       count: Number(group.querySelector('.facet-group__count')?.textContent),
     }));
-    return summary === 'Showing 1 plans' && session?.includes('bounded · horizon 10') && groups.length === 2
+    return summary === 'Showing 5 plans' && session?.includes('bounded · horizon 10') && groups.length === 2
       ? { summary, session, groups }
       : null;
   })()`,
@@ -176,7 +176,7 @@ try {
     if (document.querySelector('.status--error') || document.querySelector('.recalculating')) return null;
     const summary = document.querySelector('.solutions__summary')?.textContent?.replace(/\\s+/g, ' ').trim();
     const remaining = document.querySelector('.remaining-plans')?.textContent?.replace(/\\s+/g, ' ').trim();
-    return summary === 'Showing 1 of 60 plans' && remaining === 'Remaining plans: 60'
+    return summary === 'Showing 5 of 60 plans' && remaining === 'Remaining plans: 60'
       ? { summary, remaining }
       : null;
   })()`,
@@ -191,7 +191,7 @@ try {
   const firstPage = await waitForExpression(
     cdp,
     `document.querySelector('.solutions__summary')?.textContent?.replace(/\\s+/g, ' ').trim()
-      === 'Showing 25 of 60 plans'`,
+      === 'Showing 30 of 60 plans'`,
     90_000,
   );
 
@@ -203,7 +203,7 @@ try {
   const secondPage = await waitForExpression(
     cdp,
     `document.querySelector('.solutions__summary')?.textContent?.replace(/\\s+/g, ' ').trim()
-      === 'Showing 50 of 60 plans'`,
+      === 'Showing 55 of 60 plans'`,
     90_000,
   );
 

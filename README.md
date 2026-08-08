@@ -33,9 +33,9 @@ ng serve --port <port>
 ### Back-End Setup
 
 To run the back-end server natively we refer to the 
-[README](https://github.com/r-eifler/IPEXCO-backend) of the back-end repository.
+[README](https://github.com/VictorMerk/IPEXCO-backend) of the back-end repository.
 
-To set up the back-end server and the pre-build docker images see 
+To set up the back-end server and the pre-built Docker images see
 [Docker](setup/README.md).
 
 ### PlanPilot Setup
@@ -89,7 +89,7 @@ instructions on how to define goal templates.
 **Register all required services**
 
 How to obtain and run the docker images of the services is described in the 
-[README](https://github.com/r-eifler/IPEXCO-backend) of the back-end repository.
+[README](https://github.com/VictorMerk/IPEXCO-backend) of the back-end repository.
 
 The following `localhost` URLs apply when the back-end runs directly on the
 host. When using the PlanPilot Compose setup, use the service names from its

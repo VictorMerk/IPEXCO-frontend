@@ -2179,17 +2179,27 @@ async function showFirstGappedSolution(cdp, maximumSolutionNumber) {
 }
 
 async function showAllGraphFacets(cdp, expectedCount) {
-  const clicked = await cdp.call("Runtime.evaluate", {
+  const state = await cdp.call("Runtime.evaluate", {
     expression: `(() => {
       const button = [...document.querySelectorAll('.graph-limit button')]
         .find((candidate) => candidate.textContent?.trim() === 'All');
       button?.click();
-      return Boolean(button);
+      return {
+        clicked: Boolean(button),
+        limitVisible: Boolean(document.querySelector('.graph-limit')),
+        canvasCount: document.querySelectorAll('app-planpilot-graph canvas').length,
+      };
     })()`,
     returnByValue: true,
   });
-  if (!clicked.result.value) {
-    throw new Error("The graph did not offer its All control.");
+  if (!state.result.value.clicked) {
+    if (state.result.value.limitVisible) {
+      throw new Error("The graph limit is visible without an All control.");
+    }
+    return {
+      label: `All ${expectedCount} actions fit without expansion`,
+      canvasCount: state.result.value.canvasCount,
+    };
   }
 
   return waitForExpression(

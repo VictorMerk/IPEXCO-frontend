@@ -75,10 +75,7 @@
     color: rgba(0, 0, 0, 0.6);
   }
 
-  // Pinned to the viewport bottom while recalculating, so it stays visible no
-  // matter how far the plans list or an expanded facet group is scrolled.
-  // (The page scrolls inside <mat-sidenav-content>, where `position: sticky`
-  // is unreliable, so we use `fixed` against the viewport instead.)
+  // Keep progress visible while the page content scrolls.
   &--floating {
     position: fixed;
     left: 0;
