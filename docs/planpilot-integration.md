@@ -70,12 +70,12 @@ history.
 
 ## Fresh-clone demo
 
-Clone the three repositories next to each other as described in
-[`setup/planpilot-local/README.md`](../setup/planpilot-local/README.md), then
-run:
+The full clone, start and demo walkthrough is in the
+[PlanPilot demo guide](planpilot-demo.md). After cloning the three repositories
+next to each other, the demo is started from the front-end repository with:
 
 ```bash
-cd IPEXCO-frontend/setup/planpilot-local
+cd IPEXCO-frontend
 ./start-ipexco.sh --demo
 ```
 
@@ -132,9 +132,6 @@ prints the project id; the token is deliberately not printed or stored.
   deployment configuration.
 - The included FASB binary targets Linux x86_64. ARM hosts use Docker
   emulation and run more slowly.
-- Facets in the displayed representative plan are not automatically fixed
-  constraints. A plan facet can only be selected when FASB reports it as
-  selectable.
 
 ## Third-party components
 

@@ -45,5 +45,7 @@ service contracts and checked with local builds, tests and browser runs.
 - The bundled FASB executable requires an x86_64 Linux environment or Docker
   emulation.
 
-The setup, architecture, session lifecycle and demo route are described in
+The fresh-clone walkthrough is in
+[`docs/planpilot-demo.md`](docs/planpilot-demo.md). Architecture and session
+lifecycle details are in
 [`docs/planpilot-integration.md`](docs/planpilot-integration.md).
