@@ -1,6 +1,53 @@
 # IPEXCO Front-End
 
-## Setup
+## PlanPilot integration
+
+This version of IPEXCO integrates PlanPilot as a planning service. It provides
+two project views: Facet Navigation for selecting planning facets and a Graph
+view for exploring plans, alternatives and dependencies.
+
+### Run the demo from a fresh clone
+
+The demo requires Docker with the Docker Compose plugin, Git, Bash, `curl` and
+Node.js 22. On Windows, run the commands in WSL while Docker Desktop is
+running.
+
+```bash
+mkdir planpilot-workspace
+cd planpilot-workspace
+
+git clone --branch dev https://github.com/VictorMerk/IPEXCO-frontend.git
+git clone --branch dev --recurse-submodules https://github.com/VictorMerk/IPEXCO-backend.git
+git clone --branch master https://github.com/VictorMerk/planpilot-service.git
+
+cd IPEXCO-frontend
+./start-ipexco.sh --demo
+```
+
+The command builds and starts all required services. It also creates a demo
+user, registers the services and prepares the PlanPilot Towers project. At the
+end it prints direct links to both PlanPilot views.
+
+```text
+Username: planpilot-demo
+Password: planpilot-demo
+```
+
+Open `http://localhost:4200`, log in and select the **PlanPilot Towers**
+project. Opening PlanPilot shows Facet Navigation. The **Open graph** button
+leads to the Graph view. For the graph demo, use bounded encoding and horizon
+10.
+
+Stop the stack from the same directory with `./stop-ipexco.sh`.
+
+More information:
+
+- [Demo guide](docs/planpilot-demo.md)
+- [Architecture and session lifecycle](docs/planpilot-integration.md)
+- [Project contributions](PLANPILOT_CONTRIBUTIONS.md)
+- [Docker Compose reference](setup/planpilot-local/README.md)
+
+## Front-end development
 
 ### Dependencies
 
@@ -38,31 +85,7 @@ To run the back-end server natively we refer to the
 To set up the back-end server and the pre-built Docker images see
 [Docker](setup/README.md).
 
-### PlanPilot Setup
-
-The local Docker Compose setup starts the front-end, back-end, PlanPilot and the
-other required services:
-
-```bash
-cd setup/planpilot-local
-./start-ipexco.sh
-```
-
-Open `http://localhost:4200` after the services are ready. Setup instructions,
-Docker commands and service registration values are documented in the
-[local PlanPilot README](setup/planpilot-local/README.md).
-
-PlanPilot offers two project views:
-
-- **Facet Navigation** for selecting and reviewing planning facets
-- **Graph** for exploring plans, alternatives and dependencies
-
-The implementation and project responsibilities are summarized in
-[PLANPILOT_CONTRIBUTIONS.md](PLANPILOT_CONTRIBUTIONS.md).
-Architecture, session lifecycle, demo setup and focused test commands are in
-[the PlanPilot integration notes](docs/planpilot-integration.md).
-
-## Platform Usage
+## Existing IPEXCO platform usage
 
 ### Register
 

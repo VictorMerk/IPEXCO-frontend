@@ -1,19 +1,28 @@
 # Local PlanPilot setup
 
 This Docker Compose setup runs IPEXCO together with PlanPilot, MongoDB and the
-other planning services. It is intended for local development and demos.
+other planning services. This page documents the Compose setup itself. For the
+short fresh-clone walkthrough, use the
+[PlanPilot demo guide](../../docs/planpilot-demo.md).
+
+The directory is named `planpilot-local` because it uses demo credentials,
+host-only ports and locally built source code. Normal users can start and stop
+the stack with the helper scripts in the front-end root and do not need to work
+in this directory.
 
 ## Requirements
 
 - Docker with the Docker Compose plugin
 - Git
 - Bash (use a WSL shell on Windows)
+- `curl`
+- Node.js 22 when using `--demo`
 
 Docker Desktop must be running when using WSL. Clone the repositories inside
 the WSL filesystem, for example below `~/planpilot-workspace`, rather than below
 `/mnt/c`.
 
-## Clone
+## Folder layout
 
 The three repositories should be in the same folder:
 
@@ -22,15 +31,6 @@ planpilot-workspace/
   IPEXCO-frontend/
   IPEXCO-backend/
   planpilot-service/
-```
-
-```bash
-mkdir planpilot-workspace
-cd planpilot-workspace
-
-git clone --branch dev https://github.com/VictorMerk/IPEXCO-frontend.git
-git clone --branch dev --recurse-submodules https://github.com/VictorMerk/IPEXCO-backend.git
-git clone --branch master https://github.com/VictorMerk/planpilot-service.git
 ```
 
 If the backend was cloned without its submodule:
@@ -49,10 +49,11 @@ IPEXCO_HOST_GID="$(id -g)" \
 docker compose --profile planpilot up -d --build
 ```
 
-The included script runs the same Compose stack and additionally checks the
+The root-level helper runs the same Compose stack and additionally checks the
 required folders, ports and service readiness:
 
 ```bash
+cd IPEXCO-frontend
 ./start-ipexco.sh
 ```
 
@@ -71,7 +72,7 @@ After the stack is ready, the optional setup command creates or reuses a local
 demo user, the four service registrations and a PlanPilot Towers project:
 
 ```bash
-node setup-demo.mjs
+node setup/planpilot-local/setup-demo.mjs
 ```
 
 It is safe to run the command again. The result includes the login and direct
@@ -81,14 +82,16 @@ links to Facet Navigation and Graph. Environment variables
 
 ## Stop
 
-```bash
-docker compose --profile planpilot down --remove-orphans
-```
-
-The equivalent helper is:
+From the front-end root, use:
 
 ```bash
 ./stop-ipexco.sh
+```
+
+The corresponding direct Compose command in this directory is:
+
+```bash
+docker compose --profile planpilot down --remove-orphans
 ```
 
 User and project data remain in `.runtime` after a normal stop.
@@ -133,5 +136,7 @@ PlanPilot health is available from the host at
 The local configuration uses demo keys and open registration. Do not use it as
 a public deployment without changing the configuration.
 
-The integration design, session lifecycle, test commands and known limits are
-summarized in [`../../docs/planpilot-integration.md`](../../docs/planpilot-integration.md).
+The normal demo route is in the
+[PlanPilot demo guide](../../docs/planpilot-demo.md). The integration design,
+session lifecycle, test commands and known limits are summarized in the
+[integration notes](../../docs/planpilot-integration.md).
