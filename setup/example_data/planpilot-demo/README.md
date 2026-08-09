@@ -11,5 +11,9 @@ Recommended settings:
 - horizon 10
 - flexible steps disabled
 
+When the local Docker stack is running,
+`setup/planpilot-local/setup-demo.mjs` creates the matching domain and project
+through the IPEXCO API.
+
 The `large-8` domain and problem contain eight blocks and are useful for
 testing larger plan spaces.
