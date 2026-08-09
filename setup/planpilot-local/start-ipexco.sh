@@ -15,7 +15,7 @@ source "$SCRIPT_DIR/local-stack-lib.sh"
 
 usage() {
   cat <<'EOF'
-Usage: ./start-ipexco.sh [--build|--no-build] [--build-service SERVICE] [--with-planpilot|--without-planpilot]
+Usage: ./start-ipexco.sh [--build|--no-build] [--build-service SERVICE] [--with-planpilot|--without-planpilot] [--demo]
 
 Starts the local IPEXCO stack from sibling frontend, backend, and PlanPilot repositories.
 
@@ -24,6 +24,7 @@ Starts the local IPEXCO stack from sibling frontend, backend, and PlanPilot repo
   --build-service SERVICE    Rebuild frontend, backend, or planpilot. Repeatable.
   --with-planpilot           Start the local PlanPilot service (default).
   --without-planpilot        Start IPEXCO without the local PlanPilot service.
+  --demo                     Create or reuse the PlanPilot Towers demo project.
 
 Path overrides: IPEXCO_WORKSPACE_DIR, IPEXCO_BACKEND_DIR, PLANPILOT_SERVICE_DIR
 Other overrides: IPEXCO_SERVICE_KEY, IPEXCO_JWT_KEY, PLANPILOT_API_KEY,
@@ -35,6 +36,7 @@ BUILD=1
 BUILD_ALL_EXPLICIT=0
 WITH_PLANPILOT=1
 PLANPILOT_MODE_EXPLICIT=0
+PREPARE_DEMO=0
 BUILD_SERVICES=()
 
 add_build_service() {
@@ -54,6 +56,7 @@ while (($#)); do
     --no-build) BUILD=0 ;;
     --with-planpilot) WITH_PLANPILOT=1; PLANPILOT_MODE_EXPLICIT=1 ;;
     --without-planpilot) WITH_PLANPILOT=0; PLANPILOT_MODE_EXPLICIT=1 ;;
+    --demo) PREPARE_DEMO=1 ;;
     --build-service=*) add_build_service "${1#*=}" ;;
     --build-service)
       shift
@@ -77,9 +80,14 @@ if [[ " ${BUILD_SERVICES[*]} " == *" planpilot "* ]]; then
   fi
   WITH_PLANPILOT=1
 fi
+if (( PREPARE_DEMO && ! WITH_PLANPILOT )); then
+  echo "--demo cannot be combined with --without-planpilot." >&2
+  exit 2
+fi
 
 require_command docker
 require_command curl
+(( ! PREPARE_DEMO )) || require_command node
 require_dir "$FRONTEND_DIR"
 require_dir "$BACKEND_DIR"
 (( ! WITH_PLANPILOT )) || require_dir "$PLANPILOT_DIR"
@@ -144,6 +152,10 @@ if (( failed )); then
   echo "One or more services did not become reachable. Recent logs:"
   compose "${PROFILE_ARGS[@]}" logs --tail=100
   exit 1
+fi
+
+if (( PREPARE_DEMO )); then
+  node "$SCRIPT_DIR/setup-demo.mjs"
 fi
 
 echo "IPEXCO is running:"

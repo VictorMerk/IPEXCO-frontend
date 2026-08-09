@@ -1,6 +1,8 @@
 # PlanPilot integration
 
-The PlanPilot integration was developed during the IPEXCO student project.
+The PlanPilot integration was developed during the IPEXCO student project. It
+adds PlanPilot as a selectable IPEXCO service and makes its plan space
+available through two project views.
 
 ## Structure
 
@@ -15,11 +17,14 @@ Fast Downward + FASB
 ```
 
 The back-end owns project access and service registration. The PlanPilot
-service prepares the planning task and keeps the facet session. The front-end
-provides two views for the same session:
+service prepares the planning task and keeps facet sessions. The front-end
+provides two views based on the same project and service contract:
 
 - Facet Navigation
 - Graph and plan exploration
+
+Each view manages its own run when it starts PlanPilot. They do not silently
+share one mutable session.
 
 ## Contributions
 
@@ -39,3 +44,6 @@ service contracts and checked with local builds, tests and browser runs.
 - Exact counting can take longer for large plan spaces.
 - The bundled FASB executable requires an x86_64 Linux environment or Docker
   emulation.
+
+The setup, architecture, session lifecycle and demo route are described in
+[`docs/planpilot-integration.md`](docs/planpilot-integration.md).

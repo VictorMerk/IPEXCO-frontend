@@ -56,7 +56,28 @@ required folders, ports and service readiness:
 ./start-ipexco.sh
 ```
 
+For a fresh demo setup, one command also prepares the example user, services
+and project:
+
+```bash
+./start-ipexco.sh --demo
+```
+
 Open `http://localhost:4200` after the containers are ready.
+
+## Prepare the demo project
+
+After the stack is ready, the optional setup command creates or reuses a local
+demo user, the four service registrations and a PlanPilot Towers project:
+
+```bash
+node setup-demo.mjs
+```
+
+It is safe to run the command again. The result includes the login and direct
+links to Facet Navigation and Graph. Environment variables
+`IPEXCO_DEMO_USER`, `IPEXCO_DEMO_PASSWORD`, `IPEXCO_API_URL` and
+`IPEXCO_UI_URL` can override the local defaults.
 
 ## Stop
 
@@ -111,3 +132,6 @@ PlanPilot health is available from the host at
 
 The local configuration uses demo keys and open registration. Do not use it as
 a public deployment without changing the configuration.
+
+The integration design, session lifecycle, test commands and known limits are
+summarized in [`../../docs/planpilot-integration.md`](../../docs/planpilot-integration.md).

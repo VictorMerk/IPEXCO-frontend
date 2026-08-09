@@ -59,6 +59,8 @@ PlanPilot offers two project views:
 
 The implementation and project responsibilities are summarized in
 [PLANPILOT_CONTRIBUTIONS.md](PLANPILOT_CONTRIBUTIONS.md).
+Architecture, session lifecycle, demo setup and focused test commands are in
+[the PlanPilot integration notes](docs/planpilot-integration.md).
 
 ## Platform Usage
 
